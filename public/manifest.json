@@ -1,0 +1,28 @@
+{
+  "name": "SM - System Management",
+  "short_name": "SM",
+  "description": "Application de gestion de stock et de ventes - Développé par ING Amos JOSEPH",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#26A69A",
+  "theme_color": "#26A69A",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/sm-icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/sm-icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/sm-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

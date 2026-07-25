@@ -1,0 +1,537 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* GF Distribution Design System - Professional & Modern */
+
+/* Priority Cards - Style identique au graphique Évolution Revenus & Bénéfices */
+.priority-card > div {
+  box-shadow: inset 0 0 25px hsl(var(--primary) / 0.08), 0 4px 20px hsl(var(--primary) / 0.12);
+  animation: priority-pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.dark .priority-card > div {
+  box-shadow: inset 0 0 25px hsl(var(--primary) / 0.1), 0 6px 24px hsl(var(--primary) / 0.15);
+}
+
+@keyframes priority-pulse {
+  0%, 100% {
+    box-shadow: inset 0 0 25px hsl(var(--primary) / 0.08), 0 4px 20px hsl(var(--primary) / 0.12);
+  }
+  50% {
+    box-shadow: inset 0 0 30px hsl(var(--primary) / 0.12), 0 6px 28px hsl(var(--primary) / 0.18);
+  }
+}
+
+@keyframes priority-pulse-dark {
+  0%, 100% {
+    box-shadow: inset 0 0 25px hsl(var(--primary) / 0.1), 0 6px 24px hsl(var(--primary) / 0.15);
+  }
+  50% {
+    box-shadow: inset 0 0 35px hsl(var(--primary) / 0.15), 0 8px 32px hsl(var(--primary) / 0.22);
+  }
+}
+
+.dark .priority-card > div {
+  animation-name: priority-pulse-dark;
+}
+
+@layer base {
+  :root {
+    /* Safe Area Variables - Updated dynamically on Android via JavaScript */
+    --safe-area-top: 0px;
+    --safe-area-bottom: 0px;
+    
+    /* Legacy Safe Area Insets for mobile devices */
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-inset-left: env(safe-area-inset-left, 0px);
+    --safe-area-inset-right: env(safe-area-inset-right, 0px);
+    
+    /* Main Brand Colors */
+    --background: 210 15% 98%;
+    --foreground: 215 25% 15%;
+
+    /* Card System */
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+
+    /* Popover System */
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    /* Primary Brand - Professional Blue */
+    --primary: 220 85% 45%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 220 85% 40%;
+    --primary-light: 220 85% 95%;
+
+    /* Secondary - Neutral Gray */
+    --secondary: 215 15% 95%;
+    --secondary-foreground: 215 25% 25%;
+    --secondary-hover: 215 15% 90%;
+
+    /* Success - Business Green */
+    --success: 145 65% 45%;
+    --success-foreground: 0 0% 100%;
+    --success-light: 145 65% 95%;
+
+    /* Warning - Attention Orange */
+    --warning: 35 85% 55%;
+    --warning-foreground: 0 0% 100%;
+    --warning-light: 35 85% 95%;
+
+    /* Muted Elements */
+    --muted: 215 15% 96%;
+    --muted-foreground: 215 15% 45%;
+
+    /* Accent Colors */
+    --accent: 215 15% 96%;
+    --accent-foreground: 215 25% 15%;
+
+    /* Destructive */
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders & Inputs */
+    --border: 215 15% 88%;
+    --input: 215 15% 88%;
+    --ring: 220 85% 45%;
+
+    /* Layout */
+    --radius: 0.75rem;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(220 85% 45%), hsl(220 85% 55%));
+    --gradient-success: linear-gradient(135deg, hsl(145 65% 45%), hsl(145 65% 55%));
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(215 15% 98%));
+    --gradient-hero: linear-gradient(135deg, hsl(220 85% 45%), hsl(220 85% 35%));
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(215 25% 15% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(215 25% 15% / 0.1), 0 2px 4px -1px hsl(215 25% 15% / 0.06);
+    --shadow-lg: 0 10px 15px -3px hsl(215 25% 15% / 0.1), 0 4px 6px -2px hsl(215 25% 15% / 0.05);
+    --shadow-primary: 0 10px 25px -5px hsl(220 85% 45% / 0.25);
+
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Admin Dashboard Accent Colors - Light Mode */
+    --admin-revenue: 217 85% 50%;
+    --admin-profit: 142 70% 40%;
+    --admin-sales: 262 65% 55%;
+    --admin-target: 30 90% 50%;
+    --admin-inventory: 187 80% 45%;
+    --admin-sellers: 330 70% 50%;
+    --admin-orders: 45 85% 45%;
+    --admin-products: 199 80% 45%;
+
+    /* Seller Dashboard Colors - Light Mode (vibrantes) */
+    --seller-revenue: 217 90% 50%;
+    --seller-profit: 145 80% 35%;
+    --seller-sales: 270 75% 55%;
+    --seller-average: 38 95% 50%;
+    --seller-goal: 340 85% 55%;
+    --seller-trend: 199 85% 45%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 6%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 6%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Enhanced Primary - Vibrant Blue */
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary-glow: 217.2 91.2% 59.8%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    /* Enhanced Success - Vibrant Emerald */
+    --success: 160 84% 45%;
+    --success-foreground: 0 0% 100%;
+    --success-glow: 160 84% 45%;
+
+    /* Enhanced Warning - Vibrant Amber */
+    --warning: 45 100% 55%;
+    --warning-foreground: 0 0% 0%;
+    --warning-glow: 45 100% 55%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    /* Enhanced Accent - Vibrant Violet */
+    --accent: 262 83% 58%;
+    --accent-foreground: 210 40% 98%;
+    --accent-glow: 262 83% 58%;
+
+    /* Enhanced Destructive - Vibrant Rose */
+    --destructive: 350 89% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 217.2 32.6% 20%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 217.2 91.2% 59.8%;
+
+    /* Seller Dashboard Accent Colors */
+    --seller-revenue: 217.2 91.2% 59.8%;
+    --seller-profit: 160 84% 45%;
+    --seller-sales: 262 83% 58%;
+    --seller-average: 45 100% 55%;
+    --seller-goal: 330 81% 60%;
+    
+    /* Admin Dashboard Accent Colors - Royal & Professional */
+    --admin-revenue: 217 91% 60%;
+    --admin-profit: 160 84% 39%;
+    --admin-sales: 262 83% 58%;
+    --admin-target: 32 95% 44%;
+    --admin-inventory: 187 92% 50%;
+    --admin-sellers: 330 81% 60%;
+    --admin-orders: 45 93% 47%;
+    --admin-products: 199 89% 48%;
+
+    /* Enhanced Gradients for Dark Mode */
+    --gradient-primary: linear-gradient(135deg, hsl(217.2 91.2% 59.8%), hsl(262 83% 58%));
+    --gradient-success: linear-gradient(135deg, hsl(160 84% 45%), hsl(142 76% 50%));
+    --gradient-accent: linear-gradient(135deg, hsl(262 83% 58%), hsl(330 81% 60%));
+    --gradient-warm: linear-gradient(135deg, hsl(45 100% 55%), hsl(25 95% 55%));
+    --gradient-admin: linear-gradient(135deg, hsl(217 91% 60%), hsl(262 83% 58%));
+
+    /* Glow Shadows for Dark Mode */
+    --shadow-glow-primary: 0 0 20px hsl(217.2 91.2% 59.8% / 0.4);
+    --shadow-glow-success: 0 0 20px hsl(160 84% 45% / 0.4);
+    --shadow-glow-accent: 0 0 20px hsl(262 83% 58% / 0.4);
+    --shadow-glow-warning: 0 0 20px hsl(45 100% 55% / 0.4);
+
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  /* Custom Component Classes */
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+  
+  .gradient-success {
+    background: var(--gradient-success);
+  }
+
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  .gradient-accent {
+    background: var(--gradient-accent);
+  }
+
+  .gradient-warm {
+    background: var(--gradient-warm);
+  }
+
+  .shadow-primary {
+    box-shadow: var(--shadow-primary);
+  }
+
+  /* Dark Mode Glow Effects */
+  .dark .glow-primary {
+    box-shadow: var(--shadow-glow-primary);
+  }
+
+  .dark .glow-success {
+    box-shadow: var(--shadow-glow-success);
+  }
+
+  .dark .glow-accent {
+    box-shadow: var(--shadow-glow-accent);
+  }
+
+  .dark .glow-warning {
+    box-shadow: var(--shadow-glow-warning);
+  }
+
+  /* Seller Dashboard Card Accents */
+  .dark .seller-card-revenue {
+    border-left: 3px solid hsl(var(--seller-revenue));
+    box-shadow: inset 0 0 30px hsl(var(--seller-revenue) / 0.1), var(--shadow-glow-primary);
+  }
+
+  .dark .seller-card-profit {
+    border-left: 3px solid hsl(var(--seller-profit));
+    box-shadow: inset 0 0 30px hsl(var(--seller-profit) / 0.1), var(--shadow-glow-success);
+  }
+
+  .dark .seller-card-sales {
+    border-left: 3px solid hsl(var(--seller-sales));
+    box-shadow: inset 0 0 30px hsl(var(--seller-sales) / 0.1), var(--shadow-glow-accent);
+  }
+
+  .dark .seller-card-average {
+    border-left: 3px solid hsl(var(--seller-average));
+    box-shadow: inset 0 0 30px hsl(var(--seller-average) / 0.1), var(--shadow-glow-warning);
+  }
+
+  /* Admin Dashboard Card Accents */
+  .dark .admin-card-revenue {
+    border-left: 3px solid hsl(var(--admin-revenue));
+    box-shadow: inset 0 0 25px hsl(var(--admin-revenue) / 0.1), 0 4px 20px hsl(var(--admin-revenue) / 0.08);
+  }
+
+  .dark .admin-card-profit {
+    border-left: 3px solid hsl(var(--admin-profit));
+    box-shadow: inset 0 0 25px hsl(var(--admin-profit) / 0.1), 0 4px 20px hsl(var(--admin-profit) / 0.08);
+  }
+
+  .dark .admin-card-sales {
+    border-left: 3px solid hsl(var(--admin-sales));
+    box-shadow: inset 0 0 25px hsl(var(--admin-sales) / 0.1), 0 4px 20px hsl(var(--admin-sales) / 0.08);
+  }
+
+  .dark .admin-card-target {
+    border-left: 3px solid hsl(var(--admin-target));
+    box-shadow: inset 0 0 25px hsl(var(--admin-target) / 0.1), 0 4px 20px hsl(var(--admin-target) / 0.08);
+  }
+
+  .dark .admin-card-inventory {
+    border-left: 3px solid hsl(var(--admin-inventory));
+    box-shadow: inset 0 0 25px hsl(var(--admin-inventory) / 0.1), 0 4px 20px hsl(var(--admin-inventory) / 0.08);
+  }
+
+  .dark .admin-card-sellers {
+    border-left: 3px solid hsl(var(--admin-sellers));
+    box-shadow: inset 0 0 25px hsl(var(--admin-sellers) / 0.1), 0 4px 20px hsl(var(--admin-sellers) / 0.08);
+  }
+
+  .dark .admin-card-orders {
+    border-left: 3px solid hsl(var(--admin-orders));
+    box-shadow: inset 0 0 25px hsl(var(--admin-orders) / 0.1), 0 4px 20px hsl(var(--admin-orders) / 0.08);
+  }
+
+  .dark .admin-card-products {
+    border-left: 3px solid hsl(var(--admin-products));
+    box-shadow: inset 0 0 25px hsl(var(--admin-products) / 0.1), 0 4px 20px hsl(var(--admin-products) / 0.08);
+  }
+
+  /* Light Mode Admin Card Accents */
+  .admin-card-revenue {
+    border-left: 3px solid hsl(var(--admin-revenue));
+    box-shadow: 0 4px 12px hsl(var(--admin-revenue) / 0.08);
+  }
+
+  .admin-card-profit {
+    border-left: 3px solid hsl(var(--admin-profit));
+    box-shadow: 0 4px 12px hsl(var(--admin-profit) / 0.08);
+  }
+
+  .admin-card-sales {
+    border-left: 3px solid hsl(var(--admin-sales));
+    box-shadow: 0 4px 12px hsl(var(--admin-sales) / 0.08);
+  }
+
+  .admin-card-target {
+    border-left: 3px solid hsl(var(--admin-target));
+    box-shadow: 0 4px 12px hsl(var(--admin-target) / 0.08);
+  }
+
+  .admin-card-inventory {
+    border-left: 3px solid hsl(var(--admin-inventory));
+    box-shadow: 0 4px 12px hsl(var(--admin-inventory) / 0.08);
+  }
+
+  .admin-card-sellers {
+    border-left: 3px solid hsl(var(--admin-sellers));
+    box-shadow: 0 4px 12px hsl(var(--admin-sellers) / 0.08);
+  }
+
+  .admin-card-orders {
+    border-left: 3px solid hsl(var(--admin-orders));
+    box-shadow: 0 4px 12px hsl(var(--admin-orders) / 0.08);
+  }
+
+  .admin-card-products {
+    border-left: 3px solid hsl(var(--admin-products));
+    box-shadow: 0 4px 12px hsl(var(--admin-products) / 0.08);
+  }
+
+  /* Light Mode Seller Card Accents */
+  .seller-card-revenue {
+    border-left: 3px solid hsl(var(--seller-revenue));
+    box-shadow: 0 4px 12px hsl(var(--seller-revenue) / 0.08);
+  }
+
+  .seller-card-profit {
+    border-left: 3px solid hsl(var(--seller-profit));
+    box-shadow: 0 4px 12px hsl(var(--seller-profit) / 0.08);
+  }
+
+  .seller-card-sales {
+    border-left: 3px solid hsl(var(--seller-sales));
+    box-shadow: 0 4px 12px hsl(var(--seller-sales) / 0.08);
+  }
+
+  .seller-card-average {
+    border-left: 3px solid hsl(var(--seller-average));
+    box-shadow: 0 4px 12px hsl(var(--seller-average) / 0.08);
+  }
+
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+
+  .transition-bounce {
+    transition: var(--transition-bounce);
+  }
+
+  /* Animation fill mode for cascade animations */
+  .animate-fade-in-up {
+    animation-fill-mode: both;
+  }
+  
+  .animate-slide-in-left,
+  .animate-slide-in-right {
+    animation-fill-mode: both;
+  }
+}
+/* Admin Dashboard Card Accents - Light Mode */
+.admin-card-revenue {
+  border-left: 3px solid hsl(var(--admin-revenue));
+  box-shadow: inset 0 0 15px hsl(var(--admin-revenue) / 0.08);
+}
+
+.admin-card-profit {
+  border-left: 3px solid hsl(var(--admin-profit));
+  box-shadow: inset 0 0 15px hsl(var(--admin-profit) / 0.08);
+}
+
+.admin-card-sales {
+  border-left: 3px solid hsl(var(--admin-sales));
+  box-shadow: inset 0 0 15px hsl(var(--admin-sales) / 0.08);
+}
+
+.admin-card-products {
+  border-left: 3px solid hsl(var(--admin-products));
+  box-shadow: inset 0 0 15px hsl(var(--admin-products) / 0.08);
+}
+
+.admin-card-inventory {
+  border-left: 3px solid hsl(var(--admin-inventory));
+  box-shadow: inset 0 0 15px hsl(var(--admin-inventory) / 0.08);
+}
+
+.admin-card-sellers {
+  border-left: 3px solid hsl(var(--admin-sellers));
+  box-shadow: inset 0 0 15px hsl(var(--admin-sellers) / 0.08);
+}
+
+/* Seller Dashboard Card Accents */
+.seller-card-revenue {
+  border-left: 3px solid hsl(var(--seller-revenue));
+  box-shadow: inset 0 0 20px hsl(var(--seller-revenue) / 0.06), 0 4px 12px hsl(var(--seller-revenue) / 0.08);
+}
+
+.seller-card-profit {
+  border-left: 3px solid hsl(var(--seller-profit));
+  box-shadow: inset 0 0 20px hsl(var(--seller-profit) / 0.06), 0 4px 12px hsl(var(--seller-profit) / 0.08);
+}
+
+.seller-card-sales {
+  border-left: 3px solid hsl(var(--seller-sales));
+  box-shadow: inset 0 0 20px hsl(var(--seller-sales) / 0.06), 0 4px 12px hsl(var(--seller-sales) / 0.08);
+}
+
+.seller-card-goal {
+  border-left: 3px solid hsl(var(--seller-goal));
+  box-shadow: inset 0 0 20px hsl(var(--seller-goal) / 0.06), 0 4px 12px hsl(var(--seller-goal) / 0.08);
+}
+
+.seller-card-trend {
+  border-left: 3px solid hsl(var(--seller-trend));
+  box-shadow: inset 0 0 20px hsl(var(--seller-trend) / 0.06), 0 4px 12px hsl(var(--seller-trend) / 0.08);
+}
+
+/* Dark mode overrides for seller cards */
+.dark .seller-card-revenue {
+  border-left-color: hsl(217 91% 60%);
+  box-shadow: inset 0 0 30px hsl(217 91% 60% / 0.1), 0 0 20px hsl(217 91% 60% / 0.15);
+}
+
+.dark .seller-card-profit {
+  border-left-color: hsl(160 84% 45%);
+  box-shadow: inset 0 0 30px hsl(160 84% 45% / 0.1), 0 0 20px hsl(160 84% 45% / 0.15);
+}
+
+.dark .seller-card-sales {
+  border-left-color: hsl(262 83% 58%);
+  box-shadow: inset 0 0 30px hsl(262 83% 58% / 0.1), 0 0 20px hsl(262 83% 58% / 0.15);
+}
+
+.dark .seller-card-goal {
+  border-left-color: hsl(340 85% 60%);
+  box-shadow: inset 0 0 30px hsl(340 85% 60% / 0.1), 0 0 20px hsl(340 85% 60% / 0.15);
+}
+
+.dark .seller-card-trend {
+  border-left-color: hsl(199 89% 48%);
+  box-shadow: inset 0 0 30px hsl(199 89% 48% / 0.1), 0 0 20px hsl(199 89% 48% / 0.15);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+
+  /* Professional Typography */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-muted;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground;
+  }
+}

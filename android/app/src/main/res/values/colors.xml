@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#26A69A</color>
+    <color name="colorPrimaryDark">#1E8A7E</color>
+    <color name="colorAccent">#26A69A</color>
+    
+    <!-- Theme-aware background colors -->
+    <color name="backgroundLight">#f8fafc</color>
+    <color name="backgroundDark">#020817</color>
+    
+    <!-- Navigation bar colors (match background CSS variable) -->
+    <color name="navigationBarLight">#f8fafc</color>
+    <color name="navigationBarDark">#020817</color>
+</resources>
