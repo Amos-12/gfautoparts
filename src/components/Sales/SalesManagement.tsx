@@ -370,7 +370,18 @@ export const SalesManagement = () => {
 
       if (error) {
         console.error('Edge function error:', error);
-        throw new Error(error.message || 'Erreur lors de la suppression');
+        // Extraire le message réel renvoyé par la fonction (réponse non-2xx)
+        let detail = error.message || 'Erreur lors de la suppression';
+        const ctx = (error as any).context;
+        try {
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.clone().json();
+            if (body?.error) detail = body.error;
+          }
+        } catch (parseErr) {
+          console.error('Impossible de lire le corps de la réponse:', parseErr);
+        }
+        throw new Error(detail);
       }
 
       if (!data?.success) {

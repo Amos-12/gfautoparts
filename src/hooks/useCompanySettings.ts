@@ -18,7 +18,7 @@ export interface CompanySettings {
 const DEFAULT_SETTINGS: CompanySettings = {
   usdHtgRate: 132,
   displayCurrency: 'HTG',
-  tvaRate: 10,
+  tvaRate: 0,
   companyName: 'SYSTEM MANAGEMENT',
   address: '123 Rue Principale',
   city: 'CAYES 8110',
@@ -69,9 +69,9 @@ export function useCompanySettings(): UseCompanySettingsReturn {
 
       if (data) {
         const newSettings: CompanySettings = {
-          usdHtgRate: Number(data.usd_htg_rate) || DEFAULT_SETTINGS.usdHtgRate,
+          usdHtgRate: data.usd_htg_rate != null && !isNaN(Number(data.usd_htg_rate)) ? Number(data.usd_htg_rate) : DEFAULT_SETTINGS.usdHtgRate,
           displayCurrency: (data.default_display_currency as 'USD' | 'HTG') || DEFAULT_SETTINGS.displayCurrency,
-          tvaRate: Number(data.tva_rate) || DEFAULT_SETTINGS.tvaRate,
+          tvaRate: data.tva_rate != null && !isNaN(Number(data.tva_rate)) ? Number(data.tva_rate) : DEFAULT_SETTINGS.tvaRate,
           companyName: data.company_name || DEFAULT_SETTINGS.companyName,
           address: data.address || DEFAULT_SETTINGS.address,
           city: data.city || DEFAULT_SETTINGS.city,

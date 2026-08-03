@@ -64,34 +64,22 @@ export const useCategories = () => {
 
   useEffect(() => {
     fetchCategories();
-  
+
     // Setup realtime subscription
-    const channelName = 'categories-changes';
-  
-    // Remove existing channel if already registered
-    supabase.removeChannel(
-      supabase.channel(channelName)
-    );
-  
     const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'categories'
-        },
-        () => {
-          fetchCategories();
-        }
-      )
+      .channel('categories-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
+        fetchCategories();
+      })
       .subscribe();
-  
+
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []); }
+  }, []);
+
+  return { categories, loading, error, refetch: fetchCategories };
+};
 
 export const useSousCategories = (categorieId?: string) => {
   const [sousCategories, setSousCategories] = useState<SousCategorie[]>([]);
@@ -134,34 +122,20 @@ export const useSousCategories = (categorieId?: string) => {
 
   useEffect(() => {
     fetchSousCategories();
-  
+
     // Setup realtime subscription
-    const channelName = `sous-categories-changes-${categorieId || 'all'}`;
-  
-    // Remove existing channel if already registered
-    supabase.removeChannel(
-      supabase.channel(channelName)
-    );
-  
     const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sous_categories'
-        },
-        () => {
-          fetchSousCategories();
-        }
-      )
+      .channel('sous-categories-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sous_categories' }, () => {
+        fetchSousCategories();
+      })
       .subscribe();
-  
+
     return () => {
       supabase.removeChannel(channel);
     };
   }, [categorieId]);
+
   return { sousCategories, loading, error, refetch: fetchSousCategories };
 };
 

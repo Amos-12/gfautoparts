@@ -289,8 +289,11 @@ export const ProductManagement = () => {
 
   useEffect(() => {
     const filtered = products.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.category.toLowerCase().includes(searchTerm.toLowerCase());
+      const search = searchTerm.trim().toLowerCase();
+      const matchesSearch = search === '' ||
+        product.name.toLowerCase().includes(search) ||
+        product.category.toLowerCase().includes(search) ||
+        (product.barcode ? product.barcode.toLowerCase().includes(search) : false);
       
       // Dynamic category filter
       const matchesCategory = categoryFilter === 'all' || 

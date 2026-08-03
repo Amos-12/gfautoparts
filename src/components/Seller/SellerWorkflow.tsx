@@ -1488,6 +1488,23 @@ export const SellerWorkflow = ({ onSaleComplete, initialCart, initialCustomerNam
                     ))}
                   </SelectContent>
                 </Select>
+
+                {(searchTerm !== '' || saleTypeFilter !== 'all' || categoryFilter !== 'all' || sousCategoryFilter !== 'all') && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setSaleTypeFilter('all');
+                      setCategoryFilter('all');
+                      setSousCategoryFilter('all');
+                    }}
+                    className="h-8 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-3.5 h-3.5 mr-1" />
+                    Réinitialiser
+                  </Button>
+                )}
               </div>
               
               <div className="flex justify-between items-center px-1">
