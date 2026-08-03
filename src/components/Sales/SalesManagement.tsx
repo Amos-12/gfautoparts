@@ -226,20 +226,43 @@ export const SalesManagement = () => {
     resetPage();
   }, [searchTerm, currencyFilter, periodFilter, sellerFilter, sales]);
 
+  // Récupère TOUTES les lignes d'une table (contourne la limite de 1000 de PostgREST)
+  const fetchAllRows = async <T,>(
+    table: string,
+    columns: string,
+    orderBy?: { column: string; ascending: boolean }
+  ): Promise<T[]> => {
+    const PAGE_SIZE = 1000;
+    let from = 0;
+    const rows: T[] = [];
+
+    while (true) {
+      let query = supabase.from(table as any).select(columns).range(from, from + PAGE_SIZE - 1);
+      if (orderBy) query = query.order(orderBy.column, { ascending: orderBy.ascending });
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const batch = (data || []) as unknown as T[];
+      rows.push(...batch);
+      if (batch.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+
+    return rows;
+  };
+
   const fetchSales = async () => {
     try {
       // Fetch sales, items and settings in parallel for better performance
-      const [salesResult, itemsResult, settingsResult] = await Promise.all([
-        supabase.from('sales').select('*').order('created_at', { ascending: false }),
-        supabase.from('sale_items').select('sale_id, subtotal, currency'),
-        supabase.from('company_settings').select('tva_rate').single()
+      const [salesData, allItems, settingsResult] = await Promise.all([
+        fetchAllRows<any>('sales', '*', { column: 'created_at', ascending: false }),
+        fetchAllRows<any>('sale_items', 'sale_id, subtotal, currency'),
+        supabase.from('company_settings').select('tva_rate').limit(1).maybeSingle()
       ]);
 
-      if (salesResult.error) throw salesResult.error;
-      
-      const salesData = salesResult.data || [];
-      const allItems = itemsResult.data || [];
-      const tvaRate = settingsResult.data?.tva_rate || 0;
+      const tvaRate = settingsResult.data?.tva_rate ?? 0;
+
 
       // Build a map of sale_id -> currencies (HT amounts from items)
       const saleItemsMap = new Map<string, { htg: number; usd: number }>();
@@ -340,14 +363,17 @@ export const SalesManagement = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Un utilisateur peut avoir plusieurs rôles : on récupère toutes les lignes
       const { data, error } = await supabase
         .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .single();
+        .select('role, is_active')
+        .eq('user_id', user.id);
 
       if (error) throw error;
-      setIsAdmin(data?.role === 'admin');
+      const admin = (data || []).some((r: any) =>
+        (r.role === 'admin' || r.role === 'super_admin') && r.is_active !== false
+      );
+      setIsAdmin(admin);
     } catch (error) {
       console.error('Error checking admin role:', error);
       setIsAdmin(false);
