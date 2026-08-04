@@ -1577,6 +1577,12 @@ export const SellerWorkflow = ({ onSaleComplete, initialCart, initialCustomerNam
                       <div className="space-y-3">
                         <div>
                           <h4 className="font-semibold text-base">{product.name}</h4>
+                          {product.barcode && (
+                            <code className="inline-block mt-1 text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                              {product.barcode}
+                            </code>
+                          )}
+                          
                           
                           {/* Product specifications as horizontal colored badges */}
                           <div className="flex flex-wrap gap-1 mt-2">
