@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, Minus, BarChart3, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
-import { useTranslation } from 'react-i18next';
 
 interface ComparisonData {
   label: string;
@@ -16,7 +15,6 @@ interface SellerPerformanceComparisonProps {
 }
 
 export const SellerPerformanceComparison = ({ comparisons, currency = 'HTG' }: SellerPerformanceComparisonProps) => {
-  const { t } = useTranslation();
   const getChangePercent = (current: number, previous: number) => {
     if (previous === 0) return current > 0 ? 100 : 0;
     return ((current - previous) / previous) * 100;
@@ -29,7 +27,7 @@ export const SellerPerformanceComparison = ({ comparisons, currency = 'HTG' }: S
           <div className="p-2 rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-500/20">
             <BarChart3 className="w-5 h-5 text-violet-600 dark:text-violet-400" />
           </div>
-          {t('sellerDashboard.comparison_title')}
+          Comparaison de Performance
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -68,7 +66,7 @@ export const SellerPerformanceComparison = ({ comparisons, currency = 'HTG' }: S
                   {isPositive ? '+' : ''}{change.toFixed(1)}%
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {t('sellerDashboard.comparison_vs')} {item.suffix ? `${formatNumber(item.previous)}${item.suffix}` : (currency === 'USD' ? `$${formatNumber(item.previous)}` : `${formatNumber(item.previous)} HTG`)}
+                  vs {item.suffix ? `${formatNumber(item.previous)}${item.suffix}` : (currency === 'USD' ? `$${formatNumber(item.previous)}` : `${formatNumber(item.previous)} HTG`)}
                 </p>
               </div>
             </div>

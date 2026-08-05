@@ -23,20 +23,17 @@ import {
   ChevronDown,
   FileSpreadsheet,
   FileText,
-  FileDown,
-  Lock
+  FileDown
 } from 'lucide-react';
 import { generateAdvancedReportPDF, CompanySettings } from '@/lib/pdfGenerator';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
-import { getDateFnsLocale } from '@/lib/locale';
+import { fr } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { cn, formatNumber } from '@/lib/utils';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { useCurrencyCalculations } from '@/hooks/useCurrencyCalculations';
-import { useSubscription } from '@/hooks/useSubscription';
-import { useTranslation } from 'react-i18next';
 
 interface SalesData {
   date: string;
@@ -85,8 +82,6 @@ export const AdvancedReports = () => {
   // Use centralized hooks
   const { settings: companySettings } = useCompanySettings();
   const currencyCalc = useCurrencyCalculations();
-  const { plan, isFreePlan } = useSubscription();
-  const { t } = useTranslation();
   
   const displayCurrency = companySettings?.displayCurrency || 'HTG';
   const usdHtgRate = companySettings?.usdHtgRate || 132;
@@ -369,8 +364,8 @@ export const AdvancedReports = () => {
     } catch (error) {
       console.error('Error generating report:', error);
       toast({
-        title: t('common.error'),
-        description: t('reports.advanced.generateError'),
+        title: "Erreur",
+        description: "Impossible de générer le rapport",
         variant: "destructive"
       });
     } finally {
@@ -387,11 +382,10 @@ export const AdvancedReports = () => {
   };
 
   const exportReport = () => {
-    if (isFreePlan) { toast({ title: t('reports.advanced.premiumOnlyTitle'), description: t('reports.advanced.premiumOnlyDesc'), variant: "destructive" }); return; }
     if (!reportData) return;
 
     const csvContent = `
-Rapport de Ventes - ${format(dateRange.from, 'dd/MM/yyyy', { locale: getDateFnsLocale() })} au ${format(dateRange.to, 'dd/MM/yyyy', { locale: getDateFnsLocale() })}
+Rapport de Ventes - ${format(dateRange.from, 'dd/MM/yyyy', { locale: fr })} au ${format(dateRange.to, 'dd/MM/yyyy', { locale: fr })}
 
 Résumé:
 Ventes USD,$ ${formatNumber(reportData.totalRevenueUSD)}
@@ -420,13 +414,12 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
     document.body.removeChild(link);
 
     toast({
-      title: t('reports.advanced.exportCsvSuccessTitle'),
-      description: t('reports.advanced.exportCsvDesc')
+      title: "Succès",
+      description: "Rapport exporté avec succès"
     });
   };
 
   const exportToExcel = () => {
-    if (isFreePlan) { toast({ title: t('reports.advanced.premiumOnlyTitle'), description: t('reports.advanced.premiumOnlyDesc'), variant: "destructive" }); return; }
     if (!reportData) return;
 
     // Sheet 1: Résumé
@@ -515,17 +508,16 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
     XLSX.writeFile(wb, fileName);
     
     toast({
-      title: t('reports.advanced.exportSuccessTitle'),
-      description: t('reports.advanced.exportExcelDesc'),
+      title: "Export réussi",
+      description: "Le rapport Excel complet a été téléchargé avec succès",
     });
   };
 
   const exportToPDF = () => {
-    if (isFreePlan) { toast({ title: t('reports.advanced.premiumOnlyTitle'), description: t('reports.advanced.premiumOnlyDesc'), variant: "destructive" }); return; }
     if (!reportData || !companySettings) {
       toast({
-        title: t('common.error'),
-        description: t('reports.advanced.settingsError'),
+        title: "Erreur",
+        description: "Paramètres de l'entreprise non disponibles",
         variant: "destructive"
       });
       return;
@@ -549,8 +541,8 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
     generateAdvancedReportPDF(reportData, pdfCompanySettings, dateRange);
     
     toast({
-      title: t('reports.advanced.exportSuccessTitle'),
-      description: t('reports.advanced.exportPdfDesc'),
+      title: "Export réussi",
+      description: "Le rapport PDF a été téléchargé avec succès",
     });
   };
 
@@ -563,13 +555,13 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
         {/* Seller filter */}
         {availableFilters.includes('seller') && (
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">{t('reports.advanced.seller')}</label>
+            <label className="text-xs font-medium text-muted-foreground">Vendeur</label>
             <Select value={selectedSeller} onValueChange={setSelectedSeller}>
               <SelectTrigger className="w-36">
-                <SelectValue placeholder={t('reports.advanced.all')} />
+                <SelectValue placeholder="Tous" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('reports.advanced.all')}</SelectItem>
+                <SelectItem value="all">Tous</SelectItem>
                 {sellers.map(s => (
                   <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                 ))}
@@ -581,17 +573,17 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
         {/* Payment method filter */}
         {availableFilters.includes('payment_method') && (
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">{t('reports.advanced.payment')}</label>
+            <label className="text-xs font-medium text-muted-foreground">Paiement</label>
             <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
               <SelectTrigger className="w-32">
-                <SelectValue placeholder={t('reports.advanced.all')} />
+                <SelectValue placeholder="Tous" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('reports.advanced.all')}</SelectItem>
-                <SelectItem value="cash">{t('reports.advanced.paymentCash')}</SelectItem>
-                <SelectItem value="card">{t('reports.advanced.paymentCard')}</SelectItem>
-                <SelectItem value="transfer">{t('reports.advanced.paymentTransfer')}</SelectItem>
-                <SelectItem value="credit">{t('reports.advanced.paymentCredit')}</SelectItem>
+                <SelectItem value="all">Tous</SelectItem>
+                <SelectItem value="cash">Espèces</SelectItem>
+                <SelectItem value="card">Carte</SelectItem>
+                <SelectItem value="transfer">Virement</SelectItem>
+                <SelectItem value="credit">Crédit</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -600,13 +592,13 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
         {/* Currency filter */}
         {availableFilters.includes('currency') && (
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">{t('reports.advanced.currency')}</label>
+            <label className="text-xs font-medium text-muted-foreground">Devise</label>
             <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
               <SelectTrigger className="w-28">
-                <SelectValue placeholder={t('reports.advanced.allF')} />
+                <SelectValue placeholder="Toutes" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('reports.advanced.allF')}</SelectItem>
+                <SelectItem value="all">Toutes</SelectItem>
                 <SelectItem value="USD">USD</SelectItem>
                 <SelectItem value="HTG">HTG</SelectItem>
               </SelectContent>
@@ -617,13 +609,13 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
         {/* Category filter */}
         {availableFilters.includes('category') && (
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">{t('reports.advanced.category')}</label>
+            <label className="text-xs font-medium text-muted-foreground">Catégorie</label>
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
               <SelectTrigger className="w-36">
-                <SelectValue placeholder={t('reports.advanced.allF')} />
+                <SelectValue placeholder="Toutes" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('reports.advanced.allF')}</SelectItem>
+                <SelectItem value="all">Toutes</SelectItem>
                 {categories.map(c => (
                   <SelectItem key={c.id} value={c.id}>{c.nom}</SelectItem>
                 ))}
@@ -635,16 +627,16 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
         {/* Stock level filter */}
         {availableFilters.includes('stock_level') && (
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">{t('reports.advanced.stockLevel')}</label>
+            <label className="text-xs font-medium text-muted-foreground">Niveau stock</label>
             <Select value={selectedStockLevel} onValueChange={setSelectedStockLevel}>
               <SelectTrigger className="w-32">
-                <SelectValue placeholder={t('reports.advanced.all')} />
+                <SelectValue placeholder="Tous" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('reports.advanced.all')}</SelectItem>
-                <SelectItem value="rupture">{t('reports.advanced.stockRupture')}</SelectItem>
-                <SelectItem value="alerte">{t('reports.advanced.stockAlert')}</SelectItem>
-                <SelectItem value="normal">{t('reports.advanced.stockNormal')}</SelectItem>
+                <SelectItem value="all">Tous</SelectItem>
+                <SelectItem value="rupture">Rupture</SelectItem>
+                <SelectItem value="alerte">Alerte</SelectItem>
+                <SelectItem value="normal">Normal</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -660,7 +652,7 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
         <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
           <CardTitle className="flex items-center gap-2 text-sm sm:text-lg">
             <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5" />
-            {t('reports.advanced.title')}
+            Rapports Avancés
             <Badge 
               variant="outline" 
               className={`ml-auto text-xs px-2 py-0.5 ${
@@ -678,13 +670,13 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
             {/* Date Range */}
             <div className="space-y-1 sm:space-y-2">
-              <label className="text-xs sm:text-sm font-medium text-foreground">{t('reports.advanced.period')}</label>
+              <label className="text-xs sm:text-sm font-medium text-foreground">Période</label>
               <div className="flex items-center gap-1 sm:gap-2">
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" size="sm" className="flex-1 justify-start text-left font-normal h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3">
                       <CalendarIcon className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-                      {format(dateRange.from, 'dd/MM/yy', { locale: getDateFnsLocale() })}
+                      {format(dateRange.from, 'dd/MM/yy', { locale: fr })}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -701,7 +693,7 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
                   <PopoverTrigger asChild>
                     <Button variant="outline" size="sm" className="flex-1 justify-start text-left font-normal h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3">
                       <CalendarIcon className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-                      {format(dateRange.to, 'dd/MM/yy', { locale: getDateFnsLocale() })}
+                      {format(dateRange.to, 'dd/MM/yy', { locale: fr })}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -718,22 +710,22 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
 
             {/* Report Type */}
             <div className="space-y-1 sm:space-y-2">
-              <label className="text-xs sm:text-sm font-medium text-foreground">{t('reports.advanced.reportType')}</label>
+              <label className="text-xs sm:text-sm font-medium text-foreground">Type de rapport</label>
               <Select value={reportType} onValueChange={(value: any) => setReportType(value)}>
                 <SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="sales">{t('reports.advanced.typeSales')}</SelectItem>
-                  <SelectItem value="products">{t('reports.advanced.typeProducts')}</SelectItem>
-                  <SelectItem value="sellers">{t('reports.advanced.typeSellers')}</SelectItem>
+                  <SelectItem value="sales">Ventes</SelectItem>
+                  <SelectItem value="products">Produits</SelectItem>
+                  <SelectItem value="sellers">Vendeurs</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {/* Dynamic Filters */}
             <div className="sm:col-span-2 lg:col-span-2">
-              <label className="text-xs sm:text-sm font-medium text-foreground block mb-1 sm:mb-2">{t('reports.advanced.filters')}</label>
+              <label className="text-xs sm:text-sm font-medium text-foreground block mb-1 sm:mb-2">Filtres</label>
               {renderDynamicFilters()}
             </div>
           </div>
@@ -742,28 +734,28 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-2 border-t">
             <Button onClick={generateReport} disabled={loading} size="sm" className="gap-1.5 sm:gap-2 h-8 sm:h-9 text-xs sm:text-sm">
               <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />
-              {loading ? t('reports.advanced.generating') : t('reports.advanced.refresh')}
+              {loading ? 'Génération...' : 'Actualiser'}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" disabled={!reportData} size="sm" className="gap-1.5 sm:gap-2 h-8 sm:h-9 text-xs sm:text-sm">
-                  {isFreePlan ? <Lock className="w-3 h-3 sm:w-4 sm:h-4" /> : <Download className="w-3 h-3 sm:w-4 sm:h-4" />}
-                  <span className="hidden sm:inline">{t('reports.advanced.exportBtn')}</span>
+                  <Download className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Exporter</span>
                   <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={exportToPDF}>
                   <FileDown className="w-4 h-4 mr-2" />
-                  {t('reports.advanced.exportPdf')}
+                  Export PDF
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={exportReport}>
                   <FileText className="w-4 h-4 mr-2" />
-                  {t('reports.advanced.exportCsvQuick')}
+                  Export rapide (CSV)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={exportToExcel}>
                   <FileSpreadsheet className="w-4 h-4 mr-2" />
-                  {t('reports.advanced.exportExcelFull')}
+                  Export complet (Excel)
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -777,7 +769,7 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
             <Card className="shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 sm:p-4 pb-1 sm:pb-2">
-                <CardTitle className="text-[10px] sm:text-sm font-medium">{t('reports.advanced.salesUSD')}</CardTitle>
+                <CardTitle className="text-[10px] sm:text-sm font-medium">Ventes USD</CardTitle>
                 <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
               </CardHeader>
               <CardContent className="p-2 sm:p-4 pt-0">
@@ -789,7 +781,7 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
 
             <Card className="shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 sm:p-4 pb-1 sm:pb-2">
-                <CardTitle className="text-[10px] sm:text-sm font-medium">{t('reports.advanced.salesHTG')}</CardTitle>
+                <CardTitle className="text-[10px] sm:text-sm font-medium">Ventes HTG</CardTitle>
                 <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500" />
               </CardHeader>
               <CardContent className="p-2 sm:p-4 pt-0">
@@ -801,20 +793,20 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
 
             <Card className="shadow-lg border-primary">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 sm:p-4 pb-1 sm:pb-2">
-                <CardTitle className="text-[10px] sm:text-sm font-medium">{t('reports.advanced.totalConverted')}</CardTitle>
+                <CardTitle className="text-[10px] sm:text-sm font-medium">Total Converti</CardTitle>
                 <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
               </CardHeader>
               <CardContent className="p-2 sm:p-4 pt-0">
                 <div className="text-sm sm:text-lg font-bold text-primary">
                   {formatCurrencyDisplay(reportData.totalRevenueConverted)}
                 </div>
-                <p className="text-[8px] sm:text-xs text-muted-foreground hidden sm:block">{t('reports.seller.rate')}: 1 USD = {companySettings?.usdHtgRate || 132} HTG</p>
+                <p className="text-[8px] sm:text-xs text-muted-foreground hidden sm:block">Taux: 1 USD = {companySettings?.usdHtgRate || 132} HTG</p>
               </CardContent>
             </Card>
 
             <Card className="shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 sm:p-4 pb-1 sm:pb-2">
-                <CardTitle className="text-[10px] sm:text-sm font-medium">{t('reports.advanced.nbSales')}</CardTitle>
+                <CardTitle className="text-[10px] sm:text-sm font-medium">Nb Ventes</CardTitle>
                 <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 text-warning" />
               </CardHeader>
               <CardContent className="p-2 sm:p-4 pt-0">
@@ -826,7 +818,7 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
 
             <Card className="shadow-lg col-span-2 sm:col-span-1">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 sm:p-4 pb-1 sm:pb-2">
-                <CardTitle className="text-[10px] sm:text-sm font-medium">{t('reports.advanced.avgCart')}</CardTitle>
+                <CardTitle className="text-[10px] sm:text-sm font-medium">Panier Moyen</CardTitle>
                 <Target className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent className="p-2 sm:p-4 pt-0">
@@ -842,7 +834,7 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
             <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
               <CardTitle className="flex items-center gap-2 text-sm sm:text-lg">
                 <PieChart className="w-4 h-4 sm:w-5 sm:h-5" />
-                {t('reports.advanced.categoryDistribution')}
+                Répartition par Catégorie
               </CardTitle>
             </CardHeader>
             <CardContent className="p-3 sm:p-6 pt-0">
@@ -866,7 +858,7 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
                         />
                       </div>
                       <div className="text-[10px] sm:text-sm text-muted-foreground text-center font-medium">
-                        {cat.percentage.toFixed(1)}{t('reports.advanced.ofRevenue')}
+                        {cat.percentage.toFixed(1)}% du CA
                       </div>
                     </div>
                   );
@@ -880,7 +872,7 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
             <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
               <CardTitle className="flex items-center gap-2 text-sm sm:text-lg">
                 <Package className="w-4 h-4 sm:w-5 sm:h-5" />
-                {t('reports.advanced.topProducts')}
+                Top 10 des Produits
               </CardTitle>
             </CardHeader>
             <CardContent className="p-3 sm:p-6 pt-0">
@@ -894,7 +886,7 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
                       <div className="min-w-0">
                         <div className="font-medium text-xs sm:text-base truncate">{product.product_name}</div>
                         <div className="text-[10px] sm:text-sm text-muted-foreground">
-                          {product.quantity_sold} {t('reports.advanced.units')}
+                          {product.quantity_sold} unités
                         </div>
                       </div>
                     </div>
@@ -917,7 +909,7 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
             <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
               <CardTitle className="flex items-center gap-2 text-sm sm:text-lg">
                 <PieChart className="w-4 h-4 sm:w-5 sm:h-5" />
-                {t('reports.advanced.paymentDistribution')}
+                Répartition des Paiements
               </CardTitle>
             </CardHeader>
             <CardContent className="p-3 sm:p-6 pt-0">
@@ -935,7 +927,7 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
                       />
                     </div>
                     <div className="text-[10px] sm:text-sm text-muted-foreground mt-1">
-                      {method.percentage.toFixed(1)}{t('reports.advanced.ofSales')}
+                      {method.percentage.toFixed(1)}% des ventes
                     </div>
                   </div>
                 ))}

@@ -16,8 +16,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
-import { getDateFnsLocale } from '@/lib/locale';
-import { useTranslation } from 'react-i18next';
+import { fr } from 'date-fns/locale';
 
 interface ActivityItem {
   id: string;
@@ -71,12 +70,35 @@ const getActivityColor = (actionType: string): string => {
   return 'bg-muted text-muted-foreground';
 };
 
-const getActivityLabel = (actionType: string, t: (key: string) => string): string => {
-  return t(`dashboard.activityLabels.${actionType}`) || actionType;
+const getActivityLabel = (actionType: string): string => {
+  const labels: Record<string, string> = {
+    'sale_created': 'Vente',
+    'sale_deleted': 'Suppression',
+    'sale_cancelled': 'Annulation',
+    'product_added': 'Ajout',
+    'product_updated': 'Modification',
+    'product_deleted': 'Suppression',
+    'product_deactivated': 'Désactivation',
+    'user_approved': 'Approbation',
+    'user_deactivated': 'Désactivation',
+    'user_deleted': 'Suppression',
+    'user_login': 'Connexion',
+    'user_logout': 'Déconnexion',
+    'user_signup': 'Inscription',
+    'stock_adjusted': 'Stock',
+    'settings_updated': 'Paramètres',
+    'category_created': 'Catégorie',
+    'category_updated': 'Catégorie',
+    'category_deleted': 'Catégorie',
+    'subcategory_created': 'Sous-cat.',
+    'subcategory_updated': 'Sous-cat.',
+    'subcategory_deleted': 'Sous-cat.',
+    'system_cleanup': 'Système',
+  };
+  return labels[actionType] || actionType;
 };
 
 export const RecentActivities = () => {
-  const { t } = useTranslation();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -119,7 +141,7 @@ export const RecentActivities = () => {
 
       const activitiesWithNames = data?.map(a => ({
         ...a,
-        user_name: a.user_id ? profilesMap[a.user_id] || t('dashboard.user') : t('dashboard.system')
+        user_name: a.user_id ? profilesMap[a.user_id] || 'Utilisateur' : 'Système'
       })) || [];
 
       setActivities(activitiesWithNames);
@@ -137,8 +159,8 @@ export const RecentActivities = () => {
           <div className="p-1.5 sm:p-2 rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-500/20">
             <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-violet-600 dark:text-violet-400" />
           </div>
-          <span className="hidden sm:inline">{t('dashboard.recentActivities')}</span>
-          <span className="sm:hidden">{t('dashboard.activitiesShort')}</span>
+          <span className="hidden sm:inline">Activités Récentes</span>
+          <span className="sm:hidden">Activités</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="px-3 sm:px-6">
@@ -158,7 +180,7 @@ export const RecentActivities = () => {
           ) : activities.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
               <Activity className="h-8 w-8 sm:h-12 sm:w-12 mb-2 opacity-50" />
-              <p className="text-xs sm:text-sm">{t('dashboard.noRecentActivity')}</p>
+              <p className="text-xs sm:text-sm">Aucune activité récente</p>
             </div>
           ) : (
             <div className="space-y-1.5 sm:space-y-2">
@@ -176,7 +198,7 @@ export const RecentActivities = () => {
                         variant="secondary" 
                         className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0 sm:py-0.5 ${getActivityColor(activity.action_type)}`}
                       >
-                        {getActivityLabel(activity.action_type, t)}
+                        {getActivityLabel(activity.action_type)}
                       </Badge>
                       <span className="text-[10px] sm:text-xs text-muted-foreground truncate">
                         {activity.user_name}
@@ -188,7 +210,7 @@ export const RecentActivities = () => {
                     <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
                       {formatDistanceToNow(new Date(activity.created_at), { 
                         addSuffix: true,
-                        locale: getDateFnsLocale() 
+                        locale: fr 
                       })}
                     </p>
                   </div>

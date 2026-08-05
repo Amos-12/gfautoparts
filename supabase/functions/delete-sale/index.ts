@@ -47,23 +47,22 @@ Deno.serve(async (req) => {
       throw new Error('Non authentifié');
     }
 
-    // Get user's company_id
-    const { data: userProfile } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('user_id', user.id)
-      .single();
-
-    const companyId = userProfile?.company_id;
-
-    // Verify admin role
-    const { data: roleData, error: roleError } = await supabase
+    // Verify admin role (a user may have multiple role rows)
+    const { data: roleRows, error: roleError } = await supabase
       .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .single();
+      .select('role, is_active')
+      .eq('user_id', user.id);
 
-    if (roleError || roleData?.role !== 'admin') {
+    if (roleError) {
+      console.error('Error fetching user roles:', roleError);
+      throw new Error(`Impossible de vérifier le rôle: ${roleError.message}`);
+    }
+
+    const isAdmin = (roleRows || []).some((r: { role: string; is_active?: boolean | null }) =>
+      (r.role === 'admin' || r.role === 'super_admin') && r.is_active !== false
+    );
+
+    if (!isAdmin) {
       throw new Error('Seuls les administrateurs peuvent supprimer des ventes');
     }
 
@@ -75,24 +74,11 @@ Deno.serve(async (req) => {
 
     console.log('Starting sale deletion for sale:', saleId);
 
-    // Verify sale belongs to user's company
-    const { data: saleData, error: saleCheckError } = await supabase
-      .from('sales')
-      .select('id, company_id')
-      .eq('id', saleId)
-      .eq('company_id', companyId)
-      .single();
-
-    if (saleCheckError || !saleData) {
-      throw new Error('Vente introuvable ou non autorisée');
-    }
-
     // 1. Get all sale items for this sale
     const { data: saleItems, error: itemsError } = await supabase
       .from('sale_items')
       .select('id, product_id, quantity, product_name')
-      .eq('sale_id', saleId)
-      .eq('company_id', companyId);
+      .eq('sale_id', saleId);
 
     if (itemsError) {
       console.error('Error fetching sale items:', itemsError);
@@ -159,7 +145,6 @@ Deno.serve(async (req) => {
         .from('stock_movements')
         .insert({
           product_id: item.product_id,
-          company_id: companyId,
           movement_type: 'in',
           quantity: item.quantity,
           previous_quantity: productData.category === 'fer' ? previousStockBarre : 
@@ -179,18 +164,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3. Delete sale items
-    const { error: deleteSaleItemsError } = await supabase
-      .from('sale_items')
-      .delete()
-      .eq('sale_id', saleId);
-
-    if (deleteSaleItemsError) {
-      console.error('Error deleting sale items:', deleteSaleItemsError);
-      throw new Error('Impossible de supprimer les articles de la vente');
-    }
-
-    // 4. Update stock_movements to remove sale_id reference
+    // 3. Remove sale_id references on stock movements BEFORE deleting the sale
     const { error: updateMovementsError } = await supabase
       .from('stock_movements')
       .update({ sale_id: null })
@@ -198,6 +172,18 @@ Deno.serve(async (req) => {
 
     if (updateMovementsError) {
       console.error('Error updating stock movements:', updateMovementsError);
+      throw new Error(`Impossible de détacher les mouvements de stock: ${updateMovementsError.message}`);
+    }
+
+    // 4. Delete sale items
+    const { error: deleteSaleItemsError } = await supabase
+      .from('sale_items')
+      .delete()
+      .eq('sale_id', saleId);
+
+    if (deleteSaleItemsError) {
+      console.error('Error deleting sale items:', deleteSaleItemsError);
+      throw new Error(`Impossible de supprimer les articles de la vente: ${deleteSaleItemsError.message}`);
     }
 
     // 5. Delete the sale
@@ -208,7 +194,7 @@ Deno.serve(async (req) => {
 
     if (deleteSaleError) {
       console.error('Error deleting sale:', deleteSaleError);
-      throw new Error('Impossible de supprimer la vente');
+      throw new Error(`Impossible de supprimer la vente: ${deleteSaleError.message} ${deleteSaleError.details || ''}`.trim());
     }
 
     // 6. Log the action
@@ -216,7 +202,6 @@ Deno.serve(async (req) => {
       .from('activity_logs')
       .insert({
         user_id: user.id,
-        company_id: companyId,
         action_type: 'sale_deleted',
         entity_type: 'sale',
         entity_id: saleId,

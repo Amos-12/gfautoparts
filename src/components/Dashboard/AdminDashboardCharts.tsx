@@ -32,8 +32,7 @@ import {
   Wallet,
   BarChart3,
   Download,
-  FileText,
-  Lock
+  FileText
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -46,9 +45,6 @@ import { generateAdminDashboardPdf } from '@/lib/adminDashboardPdf';
 import { useSaleCalculations } from '@/hooks/useSaleCalculations';
 import { useCurrencyCalculations } from '@/hooks/useCurrencyCalculations';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
-import { useSubscription } from '@/hooks/useSubscription';
-import { useTranslation } from 'react-i18next';
-import { formatLocalizedTime, formatLocalizedDate } from '@/lib/locale';
 
 interface RevenueData {
   date: string;
@@ -80,11 +76,9 @@ const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'
 
 export const AdminDashboardCharts = () => {
   // Centralized hooks
-  const { t } = useTranslation();
   const { settings: companySettingsHook } = useCompanySettings();
   const saleCalc = useSaleCalculations();
   const currencyCalc = useCurrencyCalculations();
-  const { plan, isFreePlan } = useSubscription();
   
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
@@ -158,8 +152,8 @@ export const AdminDashboardCharts = () => {
     } catch (error) {
       console.error('Error fetching chart data:', error);
       toast({
-        title: t('common.error'),
-        description: t('common.loadError'),
+        title: 'Erreur',
+        description: 'Impossible de charger les données',
         variant: 'destructive',
       });
     } finally {
@@ -400,7 +394,7 @@ export const AdminDashboardCharts = () => {
       const dayStats = saleCalc.calculatePeriodStats(sales, items, dayStart, dayEnd);
 
       chartData.push({
-        date: formatLocalizedDate(dayStart, { day: '2-digit', month: 'short' }),
+        date: dayStart.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
         revenue: dayStats.revenueTTC,
         profit: dayStats.profitNet,
         sales: dayStats.count
@@ -585,7 +579,7 @@ export const AdminDashboardCharts = () => {
           const profile = profilesData?.find(p => p.user_id === sellerId);
           const stats = sellerGroups[sellerId];
           return {
-            name: profile?.full_name || t('dashboard.unknownSeller'),
+            name: profile?.full_name || 'Vendeur inconnu',
             sales: salesCountBySeller[sellerId] || 0,
             revenue: stats.revenue
           };
@@ -604,14 +598,13 @@ export const AdminDashboardCharts = () => {
   const stockTurnover = 2.5; // Placeholder - would need historical data to calculate
 
   const handleExportPdf = async () => {
-    if (isFreePlan) { toast({ title: t('common.premiumFeature'), description: t('common.premiumExportPdf'), variant: "destructive" }); return; }
     try {
       const { data: companyData } = await supabase
-        .from('companies')
+        .from('company_settings')
         .select('*')
         .single();
 
-      const periodLabel = period === 'daily' ? t('dashboard.daily') : period === 'weekly' ? t('dashboard.weekly') : t('dashboard.monthly');
+      const periodLabel = period === 'daily' ? 'Journalier' : period === 'weekly' ? 'Hebdomadaire' : 'Mensuel';
 
       await generateAdminDashboardPdf(
         {
@@ -630,7 +623,7 @@ export const AdminDashboardCharts = () => {
         categoryData,
         topSellers,
         {
-          company_name: companyData?.name || 'Mon Entreprise',
+          company_name: companyData?.company_name || 'Mon Entreprise',
           address: companyData?.address || '',
           city: companyData?.city || '',
           phone: companyData?.phone || '',
@@ -645,14 +638,14 @@ export const AdminDashboardCharts = () => {
       );
 
       toast({
-        title: t('dashboard.pdfExported'),
-        description: t('dashboard.pdfExportedDesc'),
+        title: "PDF exporté",
+        description: "Le rapport du tableau de bord a été téléchargé",
       });
     } catch (error) {
       console.error('Error exporting PDF:', error);
       toast({
-        title: t('common.error'),
-        description: t('dashboard.pdfExportError'),
+        title: "Erreur",
+        description: "Impossible d'exporter le PDF",
         variant: "destructive",
       });
     }
@@ -666,7 +659,7 @@ export const AdminDashboardCharts = () => {
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <Card key={i} className="animate-pulse">
               <CardContent className="h-32 flex items-center justify-center">
-                <div className="text-muted-foreground">{t('common.loading')}</div>
+                <div className="text-muted-foreground">Chargement...</div>
               </CardContent>
             </Card>
           ))}
@@ -681,7 +674,7 @@ export const AdminDashboardCharts = () => {
       <div className="flex flex-col gap-2">
         {/* Row 1: Title + Action buttons */}
         <div className="flex items-center justify-between">
-          <h2 className="text-lg sm:text-2xl font-bold text-foreground">{t('dashboard.title')}</h2>
+          <h2 className="text-lg sm:text-2xl font-bold text-foreground">Tableau de Bord</h2>
           <div className="flex items-center gap-1.5">
             <Button 
               variant="outline" 
@@ -689,7 +682,7 @@ export const AdminDashboardCharts = () => {
               className="h-7 w-7 sm:h-8 sm:w-8"
               onClick={handleExportPdf}
             >
-              {isFreePlan ? <Lock className="h-3 w-3 sm:h-4 sm:w-4" /> : <FileText className="h-3 w-3 sm:h-4 sm:w-4" />}
+              <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
             <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={fetchData} disabled={loading}>
               <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -701,7 +694,7 @@ export const AdminDashboardCharts = () => {
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <Badge variant="outline" className="flex items-center gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2">
             <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-            {formatLocalizedTime(lastUpdated, { hour: '2-digit', minute: '2-digit' })}
+            {lastUpdated.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
           </Badge>
           <Badge variant="outline" className="flex items-center gap-1 text-[10px] sm:text-xs bg-muted/50 px-1.5 sm:px-2">
             <DollarSign className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-primary" />
@@ -723,9 +716,9 @@ export const AdminDashboardCharts = () => {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="daily">{t('dashboard.last7days')}</SelectItem>
-              <SelectItem value="weekly">{t('dashboard.last4weeks')}</SelectItem>
-              <SelectItem value="monthly">{t('dashboard.last3months')}</SelectItem>
+              <SelectItem value="daily">7 derniers jours</SelectItem>
+              <SelectItem value="weekly">4 semaines</SelectItem>
+              <SelectItem value="monthly">3 mois</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -735,7 +728,7 @@ export const AdminDashboardCharts = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <div className="animate-fade-in priority-card" style={{ animationDelay: '0ms' }}>
           <KPICard
-            title={t('dashboard.revenueToday')}
+            title="Revenus Aujourd'hui"
             value={todayRevenue}
             previousValue={yesterdayRevenue}
             icon={DollarSign}
@@ -747,7 +740,7 @@ export const AdminDashboardCharts = () => {
         </div>
         <div className="animate-fade-in priority-card" style={{ animationDelay: '50ms' }}>
           <KPICard
-            title={t('dashboard.profitToday')}
+            title="Bénéfices Aujourd'hui"
             value={todayProfit}
             previousValue={yesterdayProfit}
             icon={TrendingUp}
@@ -759,7 +752,7 @@ export const AdminDashboardCharts = () => {
         </div>
         <div className="animate-fade-in priority-card" style={{ animationDelay: '100ms' }}>
           <KPICard
-            title={t('dashboard.revenueWeek')}
+            title="Revenus Semaine"
             value={weekRevenue}
             previousValue={prevWeekRevenue}
             icon={Wallet}
@@ -771,7 +764,7 @@ export const AdminDashboardCharts = () => {
         </div>
         <div className="animate-fade-in priority-card" style={{ animationDelay: '150ms' }}>
           <KPICard
-            title={t('dashboard.profitMonth')}
+            title="Bénéfices Mois"
             value={monthProfit}
             previousValue={prevMonthProfit}
             icon={TrendingUp}
@@ -787,7 +780,7 @@ export const AdminDashboardCharts = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         <div className="animate-fade-in" style={{ animationDelay: '200ms' }}>
           <KPICard
-            title={t('dashboard.sales')}
+            title="Ventes"
             value={todaySales}
             icon={ShoppingCart}
             format="number"
@@ -797,7 +790,7 @@ export const AdminDashboardCharts = () => {
         </div>
         <div className="animate-fade-in" style={{ animationDelay: '250ms' }}>
           <KPICard
-            title={t('dashboard.avgBasket')}
+            title="Panier Moyen"
             value={avgBasket}
             icon={BarChart3}
             format="currency"
@@ -808,7 +801,7 @@ export const AdminDashboardCharts = () => {
         </div>
         <div className="animate-fade-in" style={{ animationDelay: '300ms' }}>
           <KPICard
-            title={t('dashboard.revenueMonth')}
+            title="Revenus Mois"
             value={monthRevenue}
             previousValue={prevMonthRevenue}
             icon={Target}
@@ -820,7 +813,7 @@ export const AdminDashboardCharts = () => {
         </div>
         <div className="animate-fade-in" style={{ animationDelay: '350ms' }}>
           <KPICard
-            title={t('dashboard.products')}
+            title="Produits"
             value={totalProducts}
             icon={Package}
             format="number"
@@ -838,8 +831,8 @@ export const AdminDashboardCharts = () => {
             <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6">
               <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-admin-revenue" />
-                <span className="hidden sm:inline">{t('dashboard.revenueProfitTrend')}</span>
-                <span className="sm:hidden">{t('dashboard.revenueProfitShort')}</span>
+                <span className="hidden sm:inline">Évolution Revenus & Bénéfices</span>
+                <span className="sm:hidden">Revenus & Bénéfices</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="px-2 sm:px-6">
@@ -875,16 +868,16 @@ export const AdminDashboardCharts = () => {
                   <Area 
                     type="monotone" 
                     dataKey="revenue" 
-                    name={t('dashboard.revenue')}
-                    stroke="hsl(var(--admin-revenue))"
+                    name="Revenus"
+                    stroke="hsl(var(--admin-revenue))" 
                     strokeWidth={2}
                     fill="url(#revenueGradient)"
                   />
                   <Area 
                     type="monotone" 
                     dataKey="profit" 
-                    name={t('dashboard.profit')}
-                    stroke="hsl(var(--admin-profit))"
+                    name="Bénéfices"
+                    stroke="hsl(var(--admin-profit))" 
                     strokeWidth={2}
                     fill="url(#profitGradient)"
                   />
@@ -907,7 +900,7 @@ export const AdminDashboardCharts = () => {
           <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6">
             <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
               <Package className="h-4 w-4 sm:h-5 sm:w-5 text-admin-products" />
-              {t('dashboard.topProducts')}
+              Top Produits
             </CardTitle>
           </CardHeader>
           <CardContent className="px-2 sm:px-6">
@@ -923,7 +916,7 @@ export const AdminDashboardCharts = () => {
                     width={75}
                   />
                   <Tooltip 
-                    formatter={(value: any) => [displayCurrency === 'USD' ? `$${formatNumber(value)}` : `${formatNumber(value)} HTG`, t('dashboard.revenue')]} 
+                    formatter={(value: any) => [displayCurrency === 'USD' ? `$${formatNumber(value)}` : `${formatNumber(value)} HTG`, 'Revenus']} 
                     contentStyle={{ 
                       backgroundColor: 'hsl(var(--card))', 
                       border: '1px solid hsl(var(--border))', 
@@ -966,8 +959,8 @@ export const AdminDashboardCharts = () => {
               <div className="p-1.5 sm:p-2 rounded-lg bg-gradient-to-br from-cyan-500/20 to-teal-500/20">
                 <BarChart3 className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-cyan-600 dark:text-cyan-400" />
               </div>
-              <span className="hidden sm:inline">{t('dashboard.categoryDistribution')}</span>
-              <span className="sm:hidden">{t('dashboard.categoriesShort')}</span>
+              <span className="hidden sm:inline">Distribution par Catégorie</span>
+              <span className="sm:hidden">Catégories</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="px-3 sm:px-6">
@@ -996,7 +989,7 @@ export const AdminDashboardCharts = () => {
                       ))}
                     </Pie>
                     <Tooltip 
-                      formatter={(value: any, name: string) => [`${value} ${t('dashboard.productsCount')}`, name]}
+                      formatter={(value: any, name: string) => [`${value} produits`, name]}
                       contentStyle={{ 
                         backgroundColor: 'hsl(var(--card))', 
                         border: '1px solid hsl(var(--border))', 
@@ -1010,7 +1003,7 @@ export const AdminDashboardCharts = () => {
                 {/* Total in center */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <p className="text-lg sm:text-2xl font-bold text-foreground">{categoryData.reduce((sum, c) => sum + c.value, 0)}</p>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground">{t('dashboard.productsCount')}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Produits</p>
                 </div>
               </div>
               

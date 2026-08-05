@@ -15,8 +15,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { useTranslation } from 'react-i18next';
-import { formatLocalizedDate, formatLocalizedDateTime, formatLocalizedTime } from '@/lib/locale';
 
 interface StockMovement {
   id: string;
@@ -43,7 +41,6 @@ interface Product {
 }
 
 export const StockAlerts = () => {
-  const { t } = useTranslation();
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,8 +58,8 @@ export const StockAlerts = () => {
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
-        title: t('common.error'),
-        description: t('stockAlerts.loadError'),
+        title: "Erreur",
+        description: "Impossible de charger les notifications",
         variant: "destructive"
       });
     } finally {
@@ -148,14 +145,14 @@ export const StockAlerts = () => {
   };
 
   const formatDateCompact = (dateString: string) => {
-    return formatLocalizedDate(dateString, {
+    return new Date(dateString).toLocaleDateString('fr-FR', {
       day: '2-digit',
       month: '2-digit'
     });
   };
 
   const formatTime = (dateString: string) => {
-    return formatLocalizedTime(dateString, {
+    return new Date(dateString).toLocaleTimeString('fr-FR', {
       hour: '2-digit',
       minute: '2-digit'
     });
@@ -165,7 +162,7 @@ export const StockAlerts = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <RefreshCw className="w-6 h-6 sm:w-8 sm:h-8 text-primary animate-spin" />
-          <span className="ml-2 text-sm sm:text-base text-muted-foreground">{t('common.loading')}</span>
+        <span className="ml-2 text-sm sm:text-base text-muted-foreground">Chargement...</span>
       </div>
     );
   }
@@ -176,7 +173,7 @@ export const StockAlerts = () => {
         <h2 className="text-lg sm:text-2xl font-bold">Notifications et Alertes</h2>
         <Button onClick={fetchData} variant="outline" size="sm" className="h-8 sm:h-9">
           <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
-          <span className="hidden sm:inline">{t('common.refresh')}</span>
+          <span className="hidden sm:inline">Actualiser</span>
         </Button>
       </div>
 
@@ -185,7 +182,7 @@ export const StockAlerts = () => {
         <Alert className="border-warning p-3 sm:p-4">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription className="text-xs sm:text-sm">
-            <strong>{t('stockAlerts.lowStockAlertTitle')}</strong> {t('stockAlerts.lowStockAlertDescription', { count: lowStockProducts.length })}
+            <strong>Alerte Stock Faible:</strong> {lowStockProducts.length} produit(s) nécessitent un réapprovisionnement.
           </AlertDescription>
         </Alert>
       )}
@@ -196,14 +193,14 @@ export const StockAlerts = () => {
           <CardHeader className="p-3 sm:p-6">
             <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
               <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-warning" />
-              {t('stockAlerts.lowStockTitle', { count: lowStockProducts.length })}
+              Stock Faible ({lowStockProducts.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="p-2 sm:p-6 pt-0 sm:pt-0">
             {lowStockProducts.length === 0 ? (
               <div className="text-center py-6 sm:py-8 text-muted-foreground">
                 <CheckCircle className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-success opacity-50" />
-                 <p className="text-xs sm:text-sm">{t('stockAlerts.allProductsSufficient')}</p>
+                <p className="text-xs sm:text-sm">Tous les produits ont un stock suffisant</p>
               </div>
             ) : (
               <div className="space-y-2 sm:space-y-3 max-h-96 overflow-y-auto">
@@ -215,15 +212,15 @@ export const StockAlerts = () => {
                     <div className="min-w-0 flex-1">
                       <div className="font-medium text-xs sm:text-sm truncate">{product.name}</div>
                       <div className="text-[10px] sm:text-sm text-muted-foreground hidden sm:block">
-                         {t('common.category')}: {product.category}
+                        Catégorie: {product.category}
                       </div>
                     </div>
                     <div className="text-right ml-2 flex-shrink-0">
                       <div className="font-bold text-warning text-xs sm:text-sm">
-                         {product.quantity} {t('stockAlerts.units')}
+                        {product.quantity} unités
                       </div>
                       <div className="text-[10px] sm:text-xs text-muted-foreground">
-                         {t('stockAlerts.threshold')}: {product.alert_threshold}
+                        Seuil: {product.alert_threshold}
                       </div>
                     </div>
                   </div>
@@ -238,14 +235,14 @@ export const StockAlerts = () => {
           <CardHeader className="p-3 sm:p-6">
             <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
               <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
-              {t('stockAlerts.recentMovementsTitle', { count: movements.length })}
+              Mouvements Récents ({movements.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="p-2 sm:p-6 pt-0 sm:pt-0">
             {movements.length === 0 ? (
               <div className="text-center py-6 sm:py-8 text-muted-foreground">
                 <Package className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 opacity-50" />
-                 <p className="text-xs sm:text-sm">{t('stockAlerts.noRecentMovements')}</p>
+                <p className="text-xs sm:text-sm">Aucun mouvement de stock récent</p>
               </div>
             ) : (
               <div className="space-y-2 sm:space-y-3 max-h-96 overflow-y-auto">
@@ -260,14 +257,14 @@ export const StockAlerts = () => {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-xs sm:text-sm truncate">
-                           {movement.products?.name || t('stockAlerts.unknownProduct')}
+                          {movement.products?.name || 'Produit inconnu'}
                         </div>
                         <div className="text-[10px] sm:text-xs text-muted-foreground truncate hidden sm:block">
                           {movement.reason}
                         </div>
                         <div className="text-[10px] sm:text-xs text-muted-foreground">
                           <span className="sm:hidden">{formatDateCompact(movement.created_at)} {formatTime(movement.created_at)}</span>
-                           <span className="hidden sm:inline">{formatLocalizedDateTime(movement.created_at)}</span>
+                          <span className="hidden sm:inline">{new Date(movement.created_at).toLocaleString('fr-FR')}</span>
                         </div>
                       </div>
                     </div>

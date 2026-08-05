@@ -14,15 +14,14 @@ import { FolderTree, Plus, Edit, Trash2, Layers, Settings, GripVertical } from '
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useCategories, useSousCategories, Category, SousCategorie } from '@/hooks/useCategories';
-import { useAuth } from '@/hooks/useAuth';
 import { SubcategoryManagement } from './SubcategoryManagement';
 import { SpecificationFieldsManager } from './SpecificationFieldsManager';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/table-pagination';
-import { useTranslation } from 'react-i18next';
 
 interface SortableRowProps {
   category: Category;
@@ -33,7 +32,6 @@ interface SortableRowProps {
 }
 
 const SortableCategoryRow = ({ category, getSousCategoriesCount, onEdit, onDelete, onViewSubcategories }: SortableRowProps) => {
-  const { t } = useTranslation();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: category.id });
   
   const style = {
@@ -59,18 +57,33 @@ const SortableCategoryRow = ({ category, getSousCategoriesCount, onEdit, onDelet
       </TableCell>
       <TableCell className="p-1 sm:p-2">
         <Badge variant={category.is_active ? "default" : "secondary"} className="text-[10px] sm:text-xs">
-          {category.is_active ? t('common.active') : t('common.inactive')}
+          {category.is_active ? 'Active' : 'Inactive'}
         </Badge>
       </TableCell>
       <TableCell className="text-right p-1 sm:p-2">
         <div className="flex justify-end gap-0.5 sm:gap-1">
-          <Button variant="ghost" size="sm" className="h-6 w-6 sm:h-8 sm:w-8 p-0" onClick={() => onViewSubcategories(category)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 sm:h-8 sm:w-8 p-0"
+            onClick={() => onViewSubcategories(category)}
+          >
             <Layers className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-6 w-6 sm:h-8 sm:w-8 p-0" onClick={() => onEdit(category)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 sm:h-8 sm:w-8 p-0"
+            onClick={() => onEdit(category)}
+          >
             <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-6 w-6 sm:h-8 sm:w-8 p-0" onClick={() => onDelete(category)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 sm:h-8 sm:w-8 p-0"
+            onClick={() => onDelete(category)}
+          >
             <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
         </div>
@@ -80,8 +93,6 @@ const SortableCategoryRow = ({ category, getSousCategoriesCount, onEdit, onDelet
 };
 
 export const CategoryManagement = () => {
-  const { t } = useTranslation();
-  const { profile } = useAuth();
   const { categories, loading, refetch } = useCategories();
   const { sousCategories, refetch: refetchSousCategories } = useSousCategories();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -104,45 +115,93 @@ export const CategoryManagement = () => {
   });
 
   const resetForm = () => {
-    setFormData({ nom: '', description: '', slug: '', is_active: true, ordre: categories.length });
+    setFormData({
+      nom: '',
+      description: '',
+      slug: '',
+      is_active: true,
+      ordre: categories.length
+    });
     setEditingCategory(null);
   };
 
   const generateSlug = (nom: string) => {
-    return nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    return nom
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     try {
       const slug = formData.slug || generateSlug(formData.nom);
       const { data: { user } } = await supabase.auth.getUser();
       
       if (editingCategory) {
-        const { error } = await supabase.from('categories').update({
-          nom: formData.nom, description: formData.description || null, slug, is_active: formData.is_active, ordre: formData.ordre
-        }).eq('id', editingCategory.id);
+        const { error } = await supabase
+          .from('categories')
+          .update({
+            nom: formData.nom,
+            description: formData.description || null,
+            slug,
+            is_active: formData.is_active,
+            ordre: formData.ordre
+          })
+          .eq('id', editingCategory.id);
+
         if (error) throw error;
 
+        // Log activity
         await supabase.from('activity_logs').insert({
-          user_id: user?.id, action_type: 'category_updated' as any, entity_type: 'category', entity_id: editingCategory.id,
+          user_id: user?.id,
+          action_type: 'category_updated' as any,
+          entity_type: 'category',
+          entity_id: editingCategory.id,
           description: `Catégorie "${formData.nom}" modifiée`,
-          metadata: { category_name: formData.nom, previous_values: { nom: editingCategory.nom, is_active: editingCategory.is_active }, new_values: { nom: formData.nom, is_active: formData.is_active } }
+          metadata: {
+            category_name: formData.nom,
+            previous_values: { nom: editingCategory.nom, is_active: editingCategory.is_active },
+            new_values: { nom: formData.nom, is_active: formData.is_active }
+          }
         });
         
-        toast({ title: t('categories.categoryUpdated'), description: t('categories.categoryUpdatedDesc', { name: formData.nom }) });
+        toast({
+          title: "Catégorie mise à jour",
+          description: `La catégorie "${formData.nom}" a été modifiée.`
+        });
       } else {
-        const { data: newCategory, error } = await supabase.from('categories').insert({
-          company_id: profile?.company_id || '', nom: formData.nom, description: formData.description || null, slug, is_active: formData.is_active, ordre: formData.ordre
-        }).select().single();
+        const { data: newCategory, error } = await supabase
+          .from('categories')
+          .insert({
+            nom: formData.nom,
+            description: formData.description || null,
+            slug,
+            is_active: formData.is_active,
+            ordre: formData.ordre
+          })
+          .select()
+          .single();
+
         if (error) throw error;
 
+        // Log activity
         await supabase.from('activity_logs').insert({
-          user_id: user?.id, action_type: 'category_created' as any, entity_type: 'category', entity_id: newCategory?.id,
-          description: `Catégorie "${formData.nom}" créée`, metadata: { category_name: formData.nom, slug }
+          user_id: user?.id,
+          action_type: 'category_created' as any,
+          entity_type: 'category',
+          entity_id: newCategory?.id,
+          description: `Catégorie "${formData.nom}" créée`,
+          metadata: { category_name: formData.nom, slug }
         });
         
-        toast({ title: t('categories.categoryCreated'), description: t('categories.categoryCreatedDesc', { name: formData.nom }) });
+        toast({
+          title: "Catégorie créée",
+          description: `La catégorie "${formData.nom}" a été ajoutée.`
+        });
       }
 
       setIsDialogOpen(false);
@@ -150,47 +209,96 @@ export const CategoryManagement = () => {
       refetch();
     } catch (error: any) {
       console.error('Error saving category:', error);
-      toast({ title: t('common.error'), description: error.message || t('common.saveError'), variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de sauvegarder la catégorie.",
+        variant: "destructive"
+      });
     }
   };
 
   const handleEdit = (category: Category) => {
     setEditingCategory(category);
-    setFormData({ nom: category.nom, description: category.description || '', slug: category.slug, is_active: category.is_active, ordre: category.ordre });
+    setFormData({
+      nom: category.nom,
+      description: category.description || '',
+      slug: category.slug,
+      is_active: category.is_active,
+      ordre: category.ordre
+    });
     setIsDialogOpen(true);
   };
 
   const handleDelete = async () => {
     if (!deleteDialog.categoryId) return;
+
     try {
-      const { data: products } = await supabase.from('products').select('id').eq('categorie_id', deleteDialog.categoryId).limit(1);
+      // Check if category has products
+      const { data: products } = await supabase
+        .from('products')
+        .select('id')
+        .eq('categorie_id', deleteDialog.categoryId)
+        .limit(1);
+
       if (products && products.length > 0) {
-        toast({ title: t('categories.cannotDelete'), description: t('categories.hasProducts'), variant: "destructive" });
+        toast({
+          title: "Impossible de supprimer",
+          description: "Cette catégorie contient des produits. Supprimez d'abord les produits.",
+          variant: "destructive"
+        });
         setDeleteDialog({ open: false, categoryId: null, categoryName: '' });
         return;
       }
 
-      const { data: subCategories } = await supabase.from('sous_categories').select('id').eq('categorie_id', deleteDialog.categoryId).limit(1);
+      // Check if category has subcategories
+      const { data: subCategories } = await supabase
+        .from('sous_categories')
+        .select('id')
+        .eq('categorie_id', deleteDialog.categoryId)
+        .limit(1);
+
       if (subCategories && subCategories.length > 0) {
-        toast({ title: t('categories.cannotDelete'), description: t('categories.hasSubcategories'), variant: "destructive" });
+        toast({
+          title: "Impossible de supprimer",
+          description: "Cette catégorie contient des sous-catégories. Supprimez d'abord les sous-catégories.",
+          variant: "destructive"
+        });
         setDeleteDialog({ open: false, categoryId: null, categoryName: '' });
         return;
       }
 
       const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from('categories').delete().eq('id', deleteDialog.categoryId);
+
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', deleteDialog.categoryId);
+
       if (error) throw error;
 
+      // Log activity
       await supabase.from('activity_logs').insert({
-        user_id: user?.id, action_type: 'category_deleted' as any, entity_type: 'category', entity_id: deleteDialog.categoryId,
-        description: `Catégorie "${deleteDialog.categoryName}" supprimée`, metadata: { category_name: deleteDialog.categoryName }
+        user_id: user?.id,
+        action_type: 'category_deleted' as any,
+        entity_type: 'category',
+        entity_id: deleteDialog.categoryId,
+        description: `Catégorie "${deleteDialog.categoryName}" supprimée`,
+        metadata: { category_name: deleteDialog.categoryName }
       });
 
-      toast({ title: t('categories.categoryDeleted'), description: t('categories.categoryDeletedDesc', { name: deleteDialog.categoryName }) });
+      toast({
+        title: "Catégorie supprimée",
+        description: `La catégorie "${deleteDialog.categoryName}" a été supprimée.`
+      });
+      
       refetch();
     } catch (error: any) {
       console.error('Error deleting category:', error);
-      toast({ title: t('common.error'), description: error.message || t('common.deleteError'), variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de supprimer la catégorie.",
+        variant: "destructive"
+      });
     } finally {
       setDeleteDialog({ open: false, categoryId: null, categoryName: '' });
     }
@@ -207,18 +315,34 @@ export const CategoryManagement = () => {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
+    
     if (!over || active.id === over.id) return;
+
     const oldIndex = categories.findIndex(c => c.id === active.id);
     const newIndex = categories.findIndex(c => c.id === over.id);
+    
     const reorderedCategories = arrayMove(categories, oldIndex, newIndex);
+    
+    // Update ordre in database for all affected items
     try {
-      const updates = reorderedCategories.map((cat, index) => supabase.from('categories').update({ ordre: index }).eq('id', cat.id));
+      const updates = reorderedCategories.map((cat, index) => 
+        supabase.from('categories').update({ ordre: index }).eq('id', cat.id)
+      );
+      
       await Promise.all(updates);
       refetch();
-      toast({ title: t('categories.orderUpdated'), description: t('categories.orderUpdatedDesc') });
+      
+      toast({
+        title: "Ordre mis à jour",
+        description: "L'ordre des catégories a été modifié."
+      });
     } catch (error) {
       console.error('Error updating order:', error);
-      toast({ title: t('common.error'), description: t('categories.orderUpdateError'), variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour l'ordre.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -226,7 +350,7 @@ export const CategoryManagement = () => {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-12">
-          <div className="text-muted-foreground">{t('common.loading')}</div>
+          <div className="text-muted-foreground">Chargement...</div>
         </CardContent>
       </Card>
     );
@@ -238,18 +362,18 @@ export const CategoryManagement = () => {
         <TabsList className="grid w-full grid-cols-3 h-auto p-0.5 sm:p-1">
           <TabsTrigger value="categories" className="flex items-center gap-1 sm:gap-2 py-1.5 sm:py-2 text-[10px] sm:text-sm">
             <FolderTree className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">{t('categories.title')}</span>
-            <span className="sm:hidden">{t('categories.titleShort')}</span>
+            <span className="hidden sm:inline">Catégories</span>
+            <span className="sm:hidden">Cat.</span>
           </TabsTrigger>
           <TabsTrigger value="subcategories" className="flex items-center gap-1 sm:gap-2 py-1.5 sm:py-2 text-[10px] sm:text-sm">
             <Layers className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">{t('categories.subcategories')}</span>
-            <span className="sm:hidden">{t('categories.subcatShort')}</span>
+            <span className="hidden sm:inline">Sous-cat.</span>
+            <span className="sm:hidden">S-Cat.</span>
           </TabsTrigger>
           <TabsTrigger value="specifications" className="flex items-center gap-1 sm:gap-2 py-1.5 sm:py-2 text-[10px] sm:text-sm">
             <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">{t('categories.specifications')}</span>
-            <span className="sm:hidden">{t('categories.specsShort')}</span>
+            <span className="hidden sm:inline">Spécifications</span>
+            <span className="sm:hidden">Specs</span>
           </TabsTrigger>
         </TabsList>
 
@@ -258,47 +382,78 @@ export const CategoryManagement = () => {
             <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4 p-3 sm:p-6">
               <CardTitle className="flex items-center gap-2 text-sm sm:text-lg">
                 <FolderTree className="h-4 w-4 sm:h-5 sm:w-5" />
-                <span className="hidden sm:inline">{t('categories.management')}</span>
-                <span className="sm:hidden">{t('categories.titleShort')}</span>
+                <span className="hidden sm:inline">Gestion des Catégories</span>
+                <span className="sm:hidden">Catégories</span>
               </CardTitle>
-              <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
+              <Dialog open={isDialogOpen} onOpenChange={(open) => {
+                setIsDialogOpen(open);
+                if (!open) resetForm();
+              }}>
                 <DialogTrigger asChild>
                   <Button className="w-full sm:w-auto h-8 sm:h-10 text-xs sm:text-sm">
                     <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                    <span className="hidden sm:inline">{t('categories.newCategory')}</span>
-                    <span className="sm:hidden">{t('categories.newShort')}</span>
+                    <span className="hidden sm:inline">Nouvelle Catégorie</span>
+                    <span className="sm:hidden">Nouvelle</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle className="text-base sm:text-lg">
-                      {editingCategory ? t('categories.editCategory') : t('categories.newCategory')}
+                      {editingCategory ? 'Modifier la Catégorie' : 'Nouvelle Catégorie'}
                     </DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="nom">{t('common.name')} *</Label>
-                      <Input id="nom" value={formData.nom} onChange={(e) => setFormData({ ...formData, nom: e.target.value })} required />
+                      <Label htmlFor="nom">Nom *</Label>
+                      <Input
+                        id="nom"
+                        value={formData.nom}
+                        onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
+                        required
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="slug">{t('categories.slugAutoGenerated')}</Label>
-                      <Input id="slug" value={formData.slug} onChange={(e) => setFormData({ ...formData, slug: e.target.value })} placeholder={generateSlug(formData.nom)} />
+                      <Label htmlFor="slug">Slug (auto-généré si vide)</Label>
+                      <Input
+                        id="slug"
+                        value={formData.slug}
+                        onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                        placeholder={generateSlug(formData.nom)}
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="description">{t('common.description')}</Label>
-                      <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} />
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        rows={3}
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="ordre">{t('categories.displayOrder')}</Label>
-                      <Input id="ordre" type="number" value={formData.ordre} onChange={(e) => setFormData({ ...formData, ordre: parseInt(e.target.value) || 0 })} />
+                      <Label htmlFor="ordre">Ordre d'affichage</Label>
+                      <Input
+                        id="ordre"
+                        type="number"
+                        value={formData.ordre}
+                        onChange={(e) => setFormData({ ...formData, ordre: parseInt(e.target.value) || 0 })}
+                      />
                     </div>
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="is_active">{t('common.active')}</Label>
-                      <Switch id="is_active" checked={formData.is_active} onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })} />
+                      <Label htmlFor="is_active">Active</Label>
+                      <Switch
+                        id="is_active"
+                        checked={formData.is_active}
+                        onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                      />
                     </div>
                     <div className="flex justify-end gap-2">
-                      <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>{t('common.cancel')}</Button>
-                      <Button type="submit">{editingCategory ? t('common.updated') : t('categories.create')}</Button>
+                      <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                        Annuler
+                      </Button>
+                      <Button type="submit">
+                        {editingCategory ? 'Mettre à jour' : 'Créer'}
+                      </Button>
                     </div>
                   </form>
                 </DialogContent>
@@ -311,12 +466,12 @@ export const CategoryManagement = () => {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="hidden sm:table-cell w-8"></TableHead>
-                        <TableHead className="hidden sm:table-cell text-xs sm:text-sm">{t('categories.order')}</TableHead>
-                        <TableHead className="text-xs sm:text-sm">{t('common.name')}</TableHead>
-                        <TableHead className="hidden md:table-cell text-xs sm:text-sm">{t('categories.slug')}</TableHead>
-                        <TableHead className="hidden sm:table-cell text-xs sm:text-sm">{t('categories.subcatShort')}</TableHead>
-                        <TableHead className="text-xs sm:text-sm">{t('common.status')}</TableHead>
-                        <TableHead className="text-right text-xs sm:text-sm">{t('common.actions')}</TableHead>
+                        <TableHead className="hidden sm:table-cell text-xs sm:text-sm">Ordre</TableHead>
+                        <TableHead className="text-xs sm:text-sm">Nom</TableHead>
+                        <TableHead className="hidden md:table-cell text-xs sm:text-sm">Slug</TableHead>
+                        <TableHead className="hidden sm:table-cell text-xs sm:text-sm">S-Cat.</TableHead>
+                        <TableHead className="text-xs sm:text-sm">Statut</TableHead>
+                        <TableHead className="text-right text-xs sm:text-sm">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -327,8 +482,15 @@ export const CategoryManagement = () => {
                             category={category}
                             getSousCategoriesCount={getSousCategoriesCount}
                             onEdit={handleEdit}
-                            onDelete={(cat) => setDeleteDialog({ open: true, categoryId: cat.id, categoryName: cat.nom })}
-                            onViewSubcategories={(cat) => { setSelectedCategoryId(cat.id); setActiveTab('subcategories'); }}
+                            onDelete={(cat) => setDeleteDialog({
+                              open: true,
+                              categoryId: cat.id,
+                              categoryName: cat.nom
+                            })}
+                            onViewSubcategories={(cat) => {
+                              setSelectedCategoryId(cat.id);
+                              setActiveTab('subcategories');
+                            }}
                           />
                         ))}
                       </SortableContext>
@@ -341,26 +503,42 @@ export const CategoryManagement = () => {
         </TabsContent>
 
         <TabsContent value="subcategories">
-          <SubcategoryManagement selectedCategoryId={selectedCategoryId} onSelectCategory={setSelectedCategoryId} onSelectSubcategory={(id) => { setSelectedSousCategoryId(id); setActiveTab('specifications'); }} />
+          <ErrorBoundary title="Impossible d'afficher les sous-catégories">
+            <SubcategoryManagement 
+              selectedCategoryId={selectedCategoryId}
+              onSelectCategory={setSelectedCategoryId}
+              onSelectSubcategory={(id) => {
+                setSelectedSousCategoryId(id);
+                setActiveTab('specifications');
+              }}
+            />
+          </ErrorBoundary>
         </TabsContent>
 
         <TabsContent value="specifications">
-          <SpecificationFieldsManager selectedSousCategorieId={selectedSousCategoryId} onSelectSousCategorie={setSelectedSousCategoryId} />
+          <ErrorBoundary title="Impossible d'afficher les spécifications">
+            <SpecificationFieldsManager
+              selectedSousCategorieId={selectedSousCategoryId}
+              onSelectSousCategorie={setSelectedSousCategoryId}
+            />
+          </ErrorBoundary>
         </TabsContent>
       </Tabs>
+
 
       <AlertDialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('categories.confirmDelete')}</AlertDialogTitle>
+            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
             <AlertDialogDescription>
-              {t('categories.confirmDeleteDesc', { name: deleteDialog.categoryName })}
+              Êtes-vous sûr de vouloir supprimer la catégorie "{deleteDialog.categoryName}" ?
+              Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-              {t('common.delete')}
+              Supprimer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

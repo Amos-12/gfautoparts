@@ -82,21 +82,6 @@ Deno.serve(async (req) => {
 
     console.log('✅ User authenticated:', user.id)
 
-    // STEP 2.5: Get user's company_id
-    const { data: userProfile, error: profileError } = await supabaseClient
-      .from('profiles')
-      .select('company_id')
-      .eq('user_id', user.id)
-      .single()
-
-    if (profileError || !userProfile?.company_id) {
-      console.error('❌ Failed to get user company:', profileError)
-      throw new Error('User is not associated with a company')
-    }
-
-    const companyId = userProfile.company_id
-    console.log('🏢 Company:', companyId)
-
     // STEP 3: Parse and validate request body
     let saleData: SaleRequest
     try {
@@ -164,7 +149,6 @@ Deno.serve(async (req) => {
       .insert([{
         customer_name: saleData.customer_name,
         seller_id: user.id,
-        company_id: companyId,
         total_amount: saleData.total_amount,
         subtotal: saleData.subtotal,
         discount_type: saleData.discount_type,
@@ -184,6 +168,18 @@ Deno.serve(async (req) => {
 
     console.log('✅ Sale created:', sale.id)
 
+    // Exchange rate used to normalize purchase price currency (fallback 132)
+    let usdHtgRate = 132
+    {
+      const { data: settingsRow } = await supabaseClient
+        .from('company_settings')
+        .select('usd_htg_rate')
+        .limit(1)
+        .maybeSingle()
+      const rate = Number(settingsRow?.usd_htg_rate)
+      if (Number.isFinite(rate) && rate > 0) usdHtgRate = rate
+    }
+
     // STEP 6: Process each item
     for (const item of saleData.items) {
       console.log(`📦 Processing item: ${item.product_name}`)
@@ -196,7 +192,7 @@ Deno.serve(async (req) => {
       // Get current product with all fields including purchase_price
       const { data: currentProduct, error: fetchError } = await supabaseClient
         .from('products')
-        .select('quantity, stock_boite, stock_barre, category, purchase_price, surface_par_boite')
+        .select('quantity, stock_boite, stock_barre, category, purchase_price, surface_par_boite, currency')
         .eq('id', item.product_id)
         .single()
 
@@ -205,9 +201,41 @@ Deno.serve(async (req) => {
         throw new Error(`Failed to fetch product ${item.product_name}: ${fetchError.message}`)
       }
 
-      // Calculate profit
-      const purchasePriceAtSale = currentProduct.purchase_price || 0
+      // ---- Normalize purchase price (currency + unit) before computing profit ----
+      const saleCurrency = (item.currency || 'HTG') as 'USD' | 'HTG'
+      const productCurrency = ((currentProduct as any).currency || saleCurrency) as 'USD' | 'HTG'
+      let purchasePriceAtSale = Number(currentProduct.purchase_price) || 0
+
+      // 1) Currency: bring the purchase price into the sale line currency
+      if (purchasePriceAtSale > 0 && productCurrency !== saleCurrency) {
+        purchasePriceAtSale = productCurrency === 'USD'
+          ? purchasePriceAtSale * usdHtgRate
+          : purchasePriceAtSale / usdHtgRate
+        console.log(`   💱 Prix d'achat converti ${productCurrency}→${saleCurrency}: ${purchasePriceAtSale}`)
+      }
+
+      // 2) Unit: ceramic is sold per m². If the purchase price was entered per box,
+      //    convert it to a per-m² price using surface_par_boite.
+      const surfaceParBoite = Number((currentProduct as any).surface_par_boite) || 0
+      if (
+        currentProduct.category === 'ceramique' &&
+        surfaceParBoite > 0 &&
+        purchasePriceAtSale > item.unit_price &&
+        purchasePriceAtSale / surfaceParBoite <= item.unit_price
+      ) {
+        purchasePriceAtSale = purchasePriceAtSale / surfaceParBoite
+        console.log(`   📐 Prix d'achat céramique ramené au m²: ${purchasePriceAtSale}`)
+      }
+
+      // 3) Safety net: never record a purchase price that is not a finite positive number
+      if (!Number.isFinite(purchasePriceAtSale) || purchasePriceAtSale < 0) {
+        purchasePriceAtSale = 0
+      }
+
       const profitAmount = (item.unit_price - purchasePriceAtSale) * item.quantity
+      if (profitAmount < 0) {
+        console.warn(`   ⚠️ Bénéfice négatif pour ${item.product_name}: vente ${item.unit_price} ${saleCurrency} < achat ${purchasePriceAtSale} ${saleCurrency}`)
+      }
 
       // Insert sale item with profit data, currency and unit
       const { error: itemError } = await supabaseClient
@@ -215,7 +243,6 @@ Deno.serve(async (req) => {
         .insert([{
           sale_id: sale.id,
           product_id: item.product_id,
-          company_id: companyId,
           product_name: item.product_name,
           quantity: item.quantity,
           unit: item.unit,
@@ -297,7 +324,6 @@ Deno.serve(async (req) => {
         .from('stock_movements')
         .insert([{
           product_id: item.product_id,
-          company_id: companyId,
           movement_type: 'out',
           quantity: -item.quantity,
           previous_quantity: previousQuantity,
@@ -327,7 +353,6 @@ Deno.serve(async (req) => {
         .from('activity_logs')
         .insert({
           user_id: user.id,
-          company_id: companyId,
           action_type: 'sale_created',
           entity_type: 'sale',
           entity_id: sale.id,

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { format, isPast, differenceInDays } from 'date-fns';
-import { getDateFnsLocale, getCurrentLocale } from '@/lib/locale';
+import { fr } from 'date-fns/locale';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,15 +49,11 @@ interface SavedProformasListProps {
 }
 
 export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedProformasListProps) => {
-  const { t } = useTranslation();
   const { user } = useAuth();
   const [proformas, setProformas] = useState<SavedProforma[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [proformaToDelete, setProformaToDelete] = useState<SavedProforma | null>(null);
-
-  const dateLocale = getDateFnsLocale();
-  const numberLocale = getCurrentLocale();
 
   useEffect(() => {
     if (user) {
@@ -79,6 +74,7 @@ export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedPro
 
       if (error) throw error;
 
+      // Cast items from Json to any[]
       const typedData = (data || []).map(p => ({
         ...p,
         items: p.items as any[]
@@ -88,8 +84,8 @@ export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedPro
     } catch (error) {
       console.error('Error fetching proformas:', error);
       toast({
-        title: t('common.error'),
-        description: t('seller.proforma.errorLoad'),
+        title: "Erreur",
+        description: "Impossible de charger les pro-formas",
         variant: "destructive"
       });
     } finally {
@@ -110,14 +106,14 @@ export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedPro
 
       setProformas(prev => prev.filter(p => p.id !== proformaToDelete.id));
       toast({
-        title: t('seller.proforma.deletedTitle'),
-        description: t('seller.proforma.deletedDesc', { number: proformaToDelete.proforma_number })
+        title: "Pro-forma supprimé",
+        description: `Le pro-forma ${proformaToDelete.proforma_number} a été supprimé`
       });
     } catch (error) {
       console.error('Error deleting proforma:', error);
       toast({
-        title: t('common.error'),
-        description: t('seller.proforma.errorDelete'),
+        title: "Erreur",
+        description: "Impossible de supprimer le pro-forma",
         variant: "destructive"
       });
     } finally {
@@ -128,24 +124,24 @@ export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedPro
 
   const getStatusBadge = (proforma: SavedProforma) => {
     if (proforma.status === 'converted') {
-      return <Badge variant="default" className="bg-success text-success-foreground">{t('seller.proforma.statusConverted')}</Badge>;
+      return <Badge variant="default" className="bg-success text-success-foreground">Converti</Badge>;
     }
     
     const isExpired = isPast(new Date(proforma.expires_at));
     if (isExpired || proforma.status === 'expired') {
-      return <Badge variant="secondary" className="bg-destructive/10 text-destructive">{t('seller.proforma.statusExpired')}</Badge>;
+      return <Badge variant="secondary" className="bg-destructive/10 text-destructive">Expiré</Badge>;
     }
     
     const daysLeft = differenceInDays(new Date(proforma.expires_at), new Date());
     if (daysLeft <= 2) {
-      return <Badge variant="outline" className="border-warning text-warning">{t('seller.proforma.statusExpiringSoon')}</Badge>;
+      return <Badge variant="outline" className="border-warning text-warning">Expire bientôt</Badge>;
     }
     
-    return <Badge variant="outline" className="border-success text-success">{t('seller.proforma.statusActive')}</Badge>;
+    return <Badge variant="outline" className="border-success text-success">Actif</Badge>;
   };
 
   const formatAmount = (amount: number, currency: string) => {
-    const formatted = amount.toLocaleString(numberLocale, {
+    const formatted = amount.toLocaleString('fr-FR', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
@@ -162,7 +158,7 @@ export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedPro
         <CardContent className="py-8">
           <div className="flex items-center justify-center">
             <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-            <span className="text-muted-foreground">{t('seller.proforma.loading')}</span>
+            <span className="text-muted-foreground">Chargement...</span>
           </div>
         </CardContent>
       </Card>
@@ -175,8 +171,8 @@ export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedPro
         <CardContent className="py-8">
           <div className="text-center text-muted-foreground">
             <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p className="text-sm">{t('seller.proforma.savedEmpty')}</p>
-            <p className="text-xs mt-1">{t('seller.proforma.savedEmptyHint')}</p>
+            <p className="text-sm">Aucun pro-forma sauvegardé</p>
+            <p className="text-xs mt-1">Les pro-formas sauvegardés apparaîtront ici</p>
           </div>
         </CardContent>
       </Card>
@@ -189,7 +185,7 @@ export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedPro
         <CardHeader className="pb-3 px-3 sm:px-6">
           <CardTitle className="text-sm sm:text-base flex items-center gap-2">
             <FileText className="w-4 h-4" />
-            {t('seller.proforma.savedTitle')} ({proformas.length})
+            Pro-formas sauvegardés ({proformas.length})
           </CardTitle>
         </CardHeader>
         <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
@@ -199,6 +195,7 @@ export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedPro
                 key={proforma.id}
                 className="border rounded-lg p-3 hover:bg-accent/50 transition-colors"
               >
+                {/* Header row */}
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -209,7 +206,7 @@ export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedPro
                     </div>
                     <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                       <User className="w-3 h-3" />
-                      <span className="truncate">{proforma.customer_name || t('seller.proforma.anonymousCustomer')}</span>
+                      <span className="truncate">{proforma.customer_name || 'Client anonyme'}</span>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
@@ -217,22 +214,24 @@ export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedPro
                       {formatAmount(proforma.total_ttc, proforma.display_currency)}
                     </div>
                     <div className="text-[10px] sm:text-xs text-muted-foreground">
-                      {t('seller.proforma.itemsCount', { count: proforma.items.length })}
+                      {proforma.items.length} article{proforma.items.length > 1 ? 's' : ''}
                     </div>
                   </div>
                 </div>
 
+                {/* Date info */}
                 <div className="flex items-center gap-2 text-[10px] sm:text-xs text-muted-foreground mb-3">
                   <Clock className="w-3 h-3" />
                   <span>
-                    {t('seller.proforma.createdOn', { date: format(new Date(proforma.created_at), 'dd MMM yyyy', { locale: dateLocale }) })}
+                    Créé le {format(new Date(proforma.created_at), 'dd MMM yyyy', { locale: fr })}
                   </span>
                   <span>•</span>
                   <span>
-                    {t('seller.proforma.expiresOn', { date: format(new Date(proforma.expires_at), 'dd MMM yyyy', { locale: dateLocale }) })}
+                    Expire le {format(new Date(proforma.expires_at), 'dd MMM yyyy', { locale: fr })}
                   </span>
                 </div>
 
+                {/* Actions */}
                 <div className="flex items-center gap-2">
                   <Button 
                     variant="outline" 
@@ -241,7 +240,7 @@ export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedPro
                     onClick={() => onViewProforma(proforma)}
                   >
                     <Eye className="w-3 h-3 mr-1" />
-                    {t('seller.proforma.view')}
+                    Voir
                   </Button>
                   
                   {canConvert(proforma) && (
@@ -251,7 +250,7 @@ export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedPro
                       onClick={() => onConvertToSale(proforma)}
                     >
                       <ShoppingCart className="w-3 h-3 mr-1" />
-                      {t('seller.proforma.convertToSale')}
+                      Convertir en vente
                     </Button>
                   )}
                   
@@ -278,19 +277,21 @@ export const SavedProformasList = ({ onConvertToSale, onViewProforma }: SavedPro
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-destructive" />
-              {t('seller.proforma.deleteTitle')}
+              Supprimer le pro-forma ?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {t('seller.proforma.deleteDesc', { number: proformaToDelete?.proforma_number || '' })}
+              Êtes-vous sûr de vouloir supprimer le pro-forma{' '}
+              <span className="font-mono font-medium">{proformaToDelete?.proforma_number}</span> ?
+              Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('seller.proforma.cancel')}</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {t('seller.proforma.delete')}
+              Supprimer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

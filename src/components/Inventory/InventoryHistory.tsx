@@ -13,15 +13,24 @@ import { useToast } from '@/hooks/use-toast';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { 
-  Search, RefreshCw, Download, Calendar as CalendarIcon, ArrowUpCircle, ArrowDownCircle,
-  Settings2, TrendingUp, TrendingDown, Minus, Package, FileText
+  Search, 
+  RefreshCw, 
+  Download,
+  Calendar as CalendarIcon,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  Settings2,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Package,
+  FileText
 } from 'lucide-react';
 import { generateInventoryHistoryPDF, CompanySettings } from '@/lib/pdfGenerator';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
-import { getDateFnsLocale } from '@/lib/locale';
+import { fr } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
-import { useTranslation } from 'react-i18next';
 
 interface StockMovement {
   id: string;
@@ -43,7 +52,6 @@ type MovementFilter = 'all' | 'in' | 'out' | 'adjustment';
 type DateRange = { from: Date; to: Date };
 
 export const InventoryHistory = () => {
-  const { t } = useTranslation();
   const { toast } = useToast();
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -212,7 +220,7 @@ export const InventoryHistory = () => {
     
     movements.forEach(m => {
       const dateKey = format(new Date(m.created_at), 'yyyy-MM-dd');
-      const dateLabel = format(new Date(m.created_at), 'dd/MM', { locale: getDateFnsLocale() });
+      const dateLabel = format(new Date(m.created_at), 'dd/MM', { locale: fr });
       
       if (!dailyData[dateKey]) {
         dailyData[dateKey] = { date: dateKey, dateLabel, ins: 0, outs: 0, net: 0 };
@@ -276,7 +284,7 @@ export const InventoryHistory = () => {
 
   const exportToExcel = () => {
     const data = filteredMovements.map(m => ({
-      'Date': format(new Date(m.created_at), 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale() }),
+      'Date': format(new Date(m.created_at), 'dd/MM/yyyy HH:mm', { locale: fr }),
       'Produit': m.product_name,
       'Catégorie': m.product_category,
       'Type': getMovementLabel(m.movement_type),
@@ -295,9 +303,8 @@ export const InventoryHistory = () => {
 
   const exportToPDF = async () => {
     const { data: settings } = await supabase
-      .from('companies')
+      .from('company_settings')
       .select('*')
-      .limit(1)
       .single();
     
     if (!settings) {
@@ -321,7 +328,7 @@ export const InventoryHistory = () => {
         reason: m.reason,
         userName: m.user_name || 'Système'
       })),
-      { ...settings, company_name: settings.name } as unknown as CompanySettings,
+      settings as CompanySettings,
       stats,
       dateRange
     );
@@ -467,7 +474,7 @@ export const InventoryHistory = () => {
               <PopoverTrigger asChild>
                 <Button variant="outline" className="min-w-[240px] justify-start">
                   <CalendarIcon className="w-4 h-4 mr-2" />
-                  {format(dateRange.from, 'dd/MM/yyyy', { locale: getDateFnsLocale() })} - {format(dateRange.to, 'dd/MM/yyyy', { locale: getDateFnsLocale() })}
+                  {format(dateRange.from, 'dd/MM/yyyy', { locale: fr })} - {format(dateRange.to, 'dd/MM/yyyy', { locale: fr })}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -482,7 +489,7 @@ export const InventoryHistory = () => {
                       setDateRange({ from: range.from, to: range.from });
                     }
                   }}
-                  locale={getDateFnsLocale()}
+                  locale={fr}
                   numberOfMonths={2}
                 />
               </PopoverContent>
@@ -566,10 +573,10 @@ export const InventoryHistory = () => {
                     <TableRow key={m.id}>
                       <TableCell className="whitespace-nowrap">
                         <div className="text-sm font-medium">
-                          {format(new Date(m.created_at), 'dd/MM/yyyy', { locale: getDateFnsLocale() })}
+                          {format(new Date(m.created_at), 'dd/MM/yyyy', { locale: fr })}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {format(new Date(m.created_at), 'HH:mm', { locale: getDateFnsLocale() })}
+                          {format(new Date(m.created_at), 'HH:mm', { locale: fr })}
                         </div>
                       </TableCell>
                       <TableCell>

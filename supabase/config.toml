@@ -1,4 +1,4 @@
-project_id = "xngppwphedaexwkgfjdv"
+project_id = "fjoguviwjdofjkokivbl"
 
 [functions.process-sale]
 verify_jwt = true
@@ -8,18 +8,3 @@ verify_jwt = false
 
 [functions.delete-sale]
 verify_jwt = true
-
-[functions.validate-invitation]
-verify_jwt = false
-
-[functions.create-checkout]
-verify_jwt = false
-
-[functions.payment-webhook]
-verify_jwt = false
-
-[functions.subscription-reminders]
-verify_jwt = false
-
-[functions.verify-checkout-session]
-verify_jwt = false

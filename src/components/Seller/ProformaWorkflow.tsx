@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,8 +33,7 @@ import {
   Coffee,
   CircleDot,
   Save,
-  History,
-  Lock
+  History
 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,7 +43,6 @@ import { generateProforma } from '@/lib/pdfGenerator';
 import { useCategories, useSousCategories } from '@/hooks/useCategories';
 import { useCurrencyCalculations } from '@/hooks/useCurrencyCalculations';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
-import { useSubscription } from '@/hooks/useSubscription';
 import { SavedProformasList } from './SavedProformasList';
 
 interface SavedProforma {
@@ -156,13 +153,11 @@ const getCategoryColor = (category: string) => {
 };
 
 export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => {
-  const { t } = useTranslation();
   const { user, profile } = useAuth();
   const { categories: dynamicCategories } = useCategories();
   const { sousCategories: dynamicSousCategories } = useSousCategories();
   const { settings: companySettings } = useCompanySettings();
   const currencyCalc = useCurrencyCalculations();
-  const { plan, isFreePlan } = useSubscription();
 
   const [currentStep, setCurrentStep] = useState<WorkflowStep>('products');
   const [activeTab, setActiveTab] = useState<'new' | 'saved'>('new');
@@ -311,8 +306,8 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
     } catch (error) {
       console.error('Error fetching products:', error);
       toast({
-        title: t('common.error'),
-        description: t('seller.proformaWorkflow.loadError'),
+        title: "Erreur",
+        description: "Impossible de charger les produits",
         variant: "destructive"
       });
     } finally {
@@ -368,7 +363,7 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
     });
     
     toast({
-      title: t('seller.proformaWorkflow.addedTitle'),
+      title: "Ajouté au pro-forma",
       description: `${product.name} x${quantity}`,
     });
   }, []);
@@ -446,11 +441,10 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
   };
 
   const handlePrintProforma = () => {
-    if (isFreePlan) { toast({ title: t('common.premiumFeature'), description: t('seller.proformaWorkflow.premiumPrint'), variant: "destructive" }); return; }
     if (cart.length === 0) {
       toast({
-        title: t('seller.proformaWorkflow.emptyCart'),
-        description: t('seller.proformaWorkflow.addProductsHint'),
+        title: "Panier vide",
+        description: "Ajoutez des produits au pro-forma",
         variant: "destructive"
       });
       return;
@@ -462,7 +456,7 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
 
     const proformaData = {
       proforma_number: proformaNumber,
-      customer_name: customerName || t('seller.proformaWorkflow.defaultCustomer'),
+      customer_name: customerName || 'Client',
       validity_days: parseInt(validityDays),
       validity_date: validityDate.toISOString(),
       created_at: new Date().toISOString(),
@@ -488,20 +482,20 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
       proformaData,
       pdfCompanySettings,
       cart,
-      profile?.full_name || t('seller.proformaWorkflow.defaultSeller')
+      profile?.full_name || 'Vendeur'
     );
 
     toast({
-      title: t('seller.proformaWorkflow.generated'),
-      description: t('seller.proformaWorkflow.numberLabel', { number: proformaNumber }),
+      title: "Pro-forma généré",
+      description: `Numéro: ${proformaNumber}`,
     });
   };
 
   const handleSaveProforma = async () => {
     if (!user || cart.length === 0) {
       toast({
-        title: t('seller.proformaWorkflow.emptyCart'),
-        description: t('seller.proformaWorkflow.addProductsHint'),
+        title: "Panier vide",
+        description: "Ajoutez des produits au pro-forma",
         variant: "destructive"
       });
       return;
@@ -542,7 +536,6 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
       const { error } = await supabase
         .from('proformas')
         .insert({
-          company_id: profile?.company_id || '',
           proforma_number: proformaNumber,
           seller_id: user.id,
           customer_name: customerName || null,
@@ -559,8 +552,8 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
       if (error) throw error;
 
       toast({
-        title: t('seller.proformaWorkflow.saved'),
-        description: t('seller.proformaWorkflow.numberLabel', { number: proformaNumber }),
+        title: "Pro-forma sauvegardé",
+        description: `Numéro: ${proformaNumber}`,
       });
 
       // Refresh the saved proformas list
@@ -574,8 +567,8 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
     } catch (error) {
       console.error('Error saving proforma:', error);
       toast({
-        title: t('common.error'),
-        description: t('seller.proformaWorkflow.saveError'),
+        title: "Erreur",
+        description: "Impossible de sauvegarder le pro-forma",
         variant: "destructive"
       });
     } finally {
@@ -586,8 +579,8 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
   const handleConvertToSale = async (proforma: SavedProforma) => {
     if (!onConvertToSale) {
       toast({
-        title: t('seller.proformaWorkflow.convertUnavailableTitle'),
-        description: t('seller.proformaWorkflow.convertUnavailable'),
+        title: "Fonction non disponible",
+        description: "La conversion en vente n'est pas disponible",
         variant: "destructive"
       });
       return;
@@ -616,14 +609,14 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
       onConvertToSale(cartItems, proforma.customer_name || '');
 
       toast({
-        title: t('seller.proformaWorkflow.converted'),
-        description: t('seller.proformaWorkflow.convertedDesc'),
+        title: "Pro-forma converti",
+        description: "Vous pouvez maintenant finaliser la vente",
       });
     } catch (error) {
       console.error('Error converting proforma:', error);
       toast({
-        title: t('common.error'),
-        description: t('seller.proformaWorkflow.convertError'),
+        title: "Erreur",
+        description: "Impossible de convertir le pro-forma",
         variant: "destructive"
       });
     }
@@ -750,11 +743,11 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>{t('seller.proformaWorkflow.tableProduct')}</TableHead>
-          <TableHead className="hidden sm:table-cell">{t('seller.proformaWorkflow.tableCategory')}</TableHead>
-          <TableHead className="text-right">{t('seller.proformaWorkflow.tablePrice')}</TableHead>
-          <TableHead className="hidden sm:table-cell text-center">{t('seller.proformaWorkflow.tableCurrency')}</TableHead>
-          <TableHead className="text-center">{t('seller.proformaWorkflow.tableAction')}</TableHead>
+          <TableHead>Produit</TableHead>
+          <TableHead className="hidden sm:table-cell">Catégorie</TableHead>
+          <TableHead className="text-right">Prix</TableHead>
+          <TableHead className="hidden sm:table-cell text-center">Devise</TableHead>
+          <TableHead className="text-center">Action</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -800,7 +793,7 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <FileText className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold">{t('seller.proformaWorkflow.title')}</h2>
+          <h2 className="text-lg font-semibold">Pro-forma</h2>
         </div>
         
         <div className="flex items-center gap-2">
@@ -818,7 +811,7 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
               className="relative"
             >
               <ShoppingCart className="w-4 h-4 mr-2" />
-              {t('seller.proformaWorkflow.preview')} ({cart.length})
+              Aperçu ({cart.length})
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           )}
@@ -830,7 +823,7 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
         <div className="relative sm:col-span-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder={t('seller.proformaWorkflow.search')}
+            placeholder="Rechercher..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-9"
@@ -839,7 +832,7 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
         
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
           <SelectTrigger>
-            <SelectValue placeholder={t('seller.proformaWorkflow.categoryPlaceholder')} />
+            <SelectValue placeholder="Catégorie" />
           </SelectTrigger>
           <SelectContent>
             {availableDynamicCategories.map(cat => (
@@ -850,7 +843,7 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
 
         <Select value={sousCategoryFilter} onValueChange={setSousCategoryFilter}>
           <SelectTrigger>
-            <SelectValue placeholder={t('seller.proformaWorkflow.subcategoryPlaceholder')} />
+            <SelectValue placeholder="Sous-catégorie" />
           </SelectTrigger>
           <SelectContent>
             {availableSousCategories.map(sc => (
@@ -863,12 +856,12 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
       {/* Products Grid/List */}
       {loading ? (
         <div className="text-center py-8 text-muted-foreground">
-          {t('seller.proformaWorkflow.loadingProducts')}
+          Chargement des produits...
         </div>
       ) : filteredProducts.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground">
           <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p>{t('seller.proformaWorkflow.noProducts')}</p>
+          <p>Aucun produit trouvé</p>
         </div>
       ) : viewMode === 'cards' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -888,7 +881,7 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
           <Card className="w-full sm:max-w-md rounded-t-xl sm:rounded-xl max-h-[85vh] overflow-y-auto">
             <CardHeader className="pb-2 sm:pb-4">
               <CardTitle className="flex items-center justify-between text-sm sm:text-base">
-                <span className="truncate pr-2">{t('seller.proformaWorkflow.quantityFor', { name: selectedProduct.name })}</span>
+                <span className="truncate pr-2">Quantité - {selectedProduct.name}</span>
                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setShowQuantityDialog(false)}>
                   <X className="w-4 h-4" />
                 </Button>
@@ -902,14 +895,14 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
                     className="flex-1 h-10 sm:h-9"
                     onClick={() => setQuantityUnit('barre')}
                   >
-                    {t('seller.proformaWorkflow.bars')}
+                    Barres
                   </Button>
                   <Button
                     variant={quantityUnit === 'tonne' ? 'default' : 'outline'}
                     className="flex-1 h-10 sm:h-9"
                     onClick={() => setQuantityUnit('tonne')}
                   >
-                    {t('seller.proformaWorkflow.tons')}
+                    Tonnes
                   </Button>
                 </div>
               )}
@@ -917,10 +910,10 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
               <div>
                 <Label className="text-sm">
                   {selectedProduct.category === 'ceramique' 
-                    ? t('seller.proformaWorkflow.surfaceLabel')
+                    ? 'Surface (m²)' 
                     : quantityUnit === 'tonne' 
-                      ? t('seller.proformaWorkflow.qtyTonsLabel')
-                      : t('seller.proformaWorkflow.qtyBarsLabel')}
+                      ? 'Quantité (tonnes)' 
+                      : 'Nombre de barres'}
                 </Label>
                 <Input
                   type="number"
@@ -928,24 +921,24 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
                   min="0"
                   value={customQuantityValue}
                   onChange={(e) => setCustomQuantityValue(e.target.value)}
-                  placeholder={t('seller.proformaWorkflow.enterQuantity')}
+                  placeholder="Entrez la quantité"
                   className="mt-2 h-11 sm:h-9 text-base sm:text-sm"
                   autoFocus
                 />
                 
                 {selectedProduct.category === 'fer' && quantityUnit === 'tonne' && customQuantityValue && selectedProduct.bars_per_ton && (
                   <p className="text-xs sm:text-sm text-muted-foreground mt-2">
-                    {t('seller.proformaWorkflow.approxBars', { count: tonnageToBarres(parseFloat(customQuantityValue) || 0, selectedProduct.bars_per_ton) })}
+                    ≈ {tonnageToBarres(parseFloat(customQuantityValue) || 0, selectedProduct.bars_per_ton)} barres
                   </p>
                 )}
               </div>
               
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" className="flex-1 h-11 sm:h-9" onClick={() => setShowQuantityDialog(false)}>
-                  {t('seller.proformaWorkflow.cancel')}
+                  Annuler
                 </Button>
                 <Button className="flex-1 h-11 sm:h-9" onClick={handleConfirmQuantity}>
-                  {t('seller.proformaWorkflow.add')}
+                  Ajouter
                 </Button>
               </div>
             </CardContent>
@@ -962,22 +955,22 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
         <Button variant="ghost" onClick={() => setCurrentStep('products')} className="justify-start h-9">
           <ArrowLeft className="w-4 h-4 mr-2" />
-          <span className="hidden sm:inline">{t('seller.proformaWorkflow.backToProducts')}</span>
-          <span className="sm:hidden">{t('seller.proformaWorkflow.back')}</span>
+          <span className="hidden sm:inline">Retour aux produits</span>
+          <span className="sm:hidden">Retour</span>
         </Button>
         
         <div className="flex items-center gap-2 justify-end flex-wrap">
           <Button variant="outline" size="sm" onClick={handleNewProforma} className="h-9">
             <RefreshCw className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">{t('seller.proformaWorkflow.new')}</span>
+            <span className="hidden sm:inline">Nouveau</span>
           </Button>
           <Button variant="outline" size="sm" onClick={handleSaveProforma} disabled={isSaving || cart.length === 0} className="h-9">
             <Save className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">{isSaving ? t('seller.proformaWorkflow.saving') : t('seller.proformaWorkflow.save')}</span>
+            <span className="hidden sm:inline">{isSaving ? 'Sauvegarde...' : 'Sauvegarder'}</span>
           </Button>
           <Button size="sm" onClick={handlePrintProforma} className="h-9">
-            {isFreePlan ? <Lock className="w-4 h-4 sm:mr-2" /> : <Printer className="w-4 h-4 sm:mr-2" />}
-            <span className="hidden sm:inline">{t('seller.proformaWorkflow.printPdf')}</span>
+            <Printer className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Imprimer PDF</span>
           </Button>
         </div>
       </div>
@@ -985,30 +978,30 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
       {/* Customer Info */}
       <Card>
         <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
-          <CardTitle className="text-sm sm:text-base">{t('seller.proformaWorkflow.customerInfo')}</CardTitle>
+          <CardTitle className="text-sm sm:text-base">Informations client</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 sm:space-y-4 px-3 sm:px-6 pb-3 sm:pb-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
-              <Label className="text-xs sm:text-sm">{t('seller.proformaWorkflow.customerNameLabel')}</Label>
+              <Label className="text-xs sm:text-sm">Nom du client</Label>
               <Input
-                placeholder={t('seller.proformaWorkflow.customerNamePlaceholder')}
+                placeholder="Nom du client (optionnel)"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 className="mt-1 h-9 sm:h-10 text-sm"
               />
             </div>
             <div>
-              <Label className="text-xs sm:text-sm">{t('seller.proformaWorkflow.validityLabel')}</Label>
+              <Label className="text-xs sm:text-sm">Validité du devis</Label>
               <Select value={validityDays} onValueChange={setValidityDays}>
                 <SelectTrigger className="mt-1 h-9 sm:h-10">
                   <Calendar className="w-4 h-4 mr-2" />
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="7">{t('seller.proformaWorkflow.days7')}</SelectItem>
-                  <SelectItem value="15">{t('seller.proformaWorkflow.days15')}</SelectItem>
-                  <SelectItem value="30">{t('seller.proformaWorkflow.days30')}</SelectItem>
+                  <SelectItem value="7">7 jours</SelectItem>
+                  <SelectItem value="15">15 jours</SelectItem>
+                  <SelectItem value="30">30 jours</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1020,10 +1013,10 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
       <Card>
         <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
           <CardTitle className="text-sm sm:text-base flex items-center justify-between">
-            <span>{t('seller.proformaWorkflow.items', { count: cart.length })}</span>
+            <span>Articles ({cart.length})</span>
             <Button variant="ghost" size="sm" onClick={clearCart} className="text-destructive h-8 px-2 sm:px-3">
               <Trash2 className="w-4 h-4 sm:mr-1" />
-              <span className="hidden sm:inline">{t('seller.proformaWorkflow.clear')}</span>
+              <span className="hidden sm:inline">Vider</span>
             </Button>
           </CardTitle>
         </CardHeader>
@@ -1144,15 +1137,15 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
             {cartTotals.hasMultipleCurrencies && (
               <>
                 <div className="flex justify-between text-xs sm:text-sm">
-                  <span className="text-muted-foreground">{t('seller.proformaWorkflow.subtotalHTG')}</span>
+                  <span className="text-muted-foreground">Sous-total HTG</span>
                   <span>{formatAmount(cartTotals.totalHTG, 'HTG')}</span>
                 </div>
                 <div className="flex justify-between text-xs sm:text-sm">
-                  <span className="text-muted-foreground">{t('seller.proformaWorkflow.subtotalUSD')}</span>
+                  <span className="text-muted-foreground">Sous-total USD</span>
                   <span>{formatAmount(cartTotals.totalUSD, 'USD')}</span>
                 </div>
                 <div className="flex justify-between text-[10px] sm:text-xs text-muted-foreground">
-                  <span>{t('seller.proformaWorkflow.exchangeRate')}</span>
+                  <span>Taux de change</span>
                   <span>1 USD = {cartTotals.rate.toFixed(2)} HTG</span>
                 </div>
                 <Separator className="my-1.5 sm:my-2" />
@@ -1160,14 +1153,14 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
             )}
             
             <div className="flex justify-between text-xs sm:text-sm">
-              <span className="text-muted-foreground">{t('seller.proformaWorkflow.subtotalHT')}</span>
+              <span className="text-muted-foreground">Sous-total HT</span>
               <span className="font-medium">{formatAmount(cartTotals.unifiedTotal, cartTotals.displayCurrency)}</span>
             </div>
             
             <div className="flex justify-between text-xs sm:text-sm">
               <span className="text-muted-foreground">
                 TVA ({companySettings.tvaRate}%) 
-                <span className="text-[10px] sm:text-xs ml-1">{t('seller.proformaWorkflow.tvaIndicative')}</span>
+                <span className="text-[10px] sm:text-xs ml-1">(indicatif)</span>
               </span>
               <span>{formatAmount(cartTotals.tvaAmount, cartTotals.displayCurrency)}</span>
             </div>
@@ -1175,7 +1168,7 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
             <Separator className="my-1.5 sm:my-2" />
             
             <div className="flex justify-between items-center pt-1">
-              <span className="font-semibold text-sm sm:text-base">{t('seller.proformaWorkflow.totalEstimated')}</span>
+              <span className="font-semibold text-sm sm:text-base">Total TTC estimé</span>
               <span className="text-lg sm:text-xl font-bold text-primary">
                 {formatAmount(cartTotals.totalTTC, cartTotals.displayCurrency)}
               </span>
@@ -1184,7 +1177,8 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
           
           <div className="mt-3 sm:mt-4 p-2 sm:p-3 bg-muted/50 rounded-lg">
             <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
-{t('seller.proformaWorkflow.estimateDisclaimer')}
+              Ce document est une estimation et ne constitue pas une facture.
+              Les prix peuvent être sujets à modification.
             </p>
           </div>
         </CardContent>
@@ -1210,13 +1204,13 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
           <TabsList className="grid w-full grid-cols-2 mb-4">
             <TabsTrigger value="new" className="flex items-center gap-2">
               <FileText className="w-4 h-4" />
-              <span className="hidden sm:inline">{t('seller.proformaWorkflow.tabNew')}</span>
-              <span className="sm:hidden">{t('seller.proformaWorkflow.tabNewShort')}</span>
+              <span className="hidden sm:inline">Nouveau Pro-forma</span>
+              <span className="sm:hidden">Nouveau</span>
             </TabsTrigger>
             <TabsTrigger value="saved" className="flex items-center gap-2">
               <History className="w-4 h-4" />
-              <span className="hidden sm:inline">{t('seller.proformaWorkflow.tabSaved')}</span>
-              <span className="sm:hidden">{t('seller.proformaWorkflow.tabSavedShort')}</span>
+              <span className="hidden sm:inline">Pro-formas sauvegardés</span>
+              <span className="sm:hidden">Sauvegardés</span>
             </TabsTrigger>
           </TabsList>
           

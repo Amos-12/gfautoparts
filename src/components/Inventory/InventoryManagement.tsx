@@ -12,14 +12,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
 import { Constants } from '@/integrations/supabase/types';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatNumber } from '@/lib/utils';
-import { useSubscription } from '@/hooks/useSubscription';
-import { useTranslation } from 'react-i18next';
 import { 
   Package, 
   Search, 
@@ -39,8 +36,7 @@ import {
   Info,
   LayoutGrid,
   List,
-  ScanLine,
-  Lock
+  ScanLine
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -72,11 +68,8 @@ type SortField = 'name' | 'quantity' | 'category' | 'price';
 type SortDirection = 'asc' | 'desc';
 
 export const InventoryManagement = () => {
-  const { t } = useTranslation();
   const { toast } = useToast();
-  const { profile } = useAuth();
   const isMobile = useIsMobile();
-  const { plan, isFreePlan } = useSubscription();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -118,8 +111,8 @@ export const InventoryManagement = () => {
     } catch (error) {
       console.error('Error fetching products:', error);
       toast({
-        title: t('common.error'),
-        description: t('inventory.loadError'),
+        title: 'Erreur',
+        description: 'Impossible de charger les produits',
         variant: 'destructive'
       });
     } finally {
@@ -163,10 +156,10 @@ export const InventoryManagement = () => {
     }
     // Fer: utiliser stock_barre seulement si > 0
     if (product.category === 'fer' && product.stock_barre !== null && product.stock_barre > 0) {
-      return { value: product.stock_barre, unit: t('inventory.unitBars'), raw: product.stock_barre };
+      return { value: product.stock_barre, unit: 'barres', raw: product.stock_barre };
     }
     // Par défaut: utiliser quantity
-    return { value: product.quantity, unit: product.unit || t('inventory.unitDefault'), raw: product.quantity };
+    return { value: product.quantity, unit: product.unit || 'unités', raw: product.quantity };
   };
 
   const getStockStatus = (product: Product) => {
@@ -292,8 +285,8 @@ export const InventoryManagement = () => {
   const handleAdjustment = async () => {
     if (!adjustmentModal.product || !adjustmentQuantity || !adjustmentReason) {
       toast({
-        title: t('common.error'),
-        description: t('inventory.fillAllFields'),
+        title: 'Erreur',
+        description: 'Veuillez remplir tous les champs',
         variant: 'destructive'
       });
       return;
@@ -347,7 +340,6 @@ export const InventoryManagement = () => {
       const { error: movementError } = await supabase
         .from('stock_movements')
         .insert({
-          company_id: profile?.company_id || '',
           product_id: product.id,
           movement_type: movementType,
           quantity: qty,
@@ -378,8 +370,8 @@ export const InventoryManagement = () => {
       });
 
       toast({
-        title: t('inventory.stockUpdated'),
-        description: t('inventory.stockUpdatedDesc', { name: product.name }),
+        title: 'Stock mis à jour',
+        description: `Le stock de ${product.name} a été mis à jour`,
       });
 
       setAdjustmentModal({ open: false, product: null, type: 'add' });
@@ -387,8 +379,8 @@ export const InventoryManagement = () => {
     } catch (error) {
       console.error('Error adjusting stock:', error);
       toast({
-        title: t('common.error'),
-        description: t('inventory.updateError'),
+        title: 'Erreur',
+        description: 'Impossible de mettre à jour le stock',
         variant: 'destructive'
       });
     } finally {
@@ -397,41 +389,38 @@ export const InventoryManagement = () => {
   };
 
   const exportToExcel = () => {
-    if (isFreePlan) { toast({ title: t('inventory.premiumFeature'), description: t('inventory.premiumExports'), variant: "destructive" }); return; }
     const data = filteredProducts.map(p => {
       const stock = getStockDisplay(p);
       return {
-        [t('inventory.product')]: p.name,
-        [t('inventory.category')]: p.category,
-        [t('inventory.stock')]: stock.value,
-        [t('common.unit') !== 'common.unit' ? t('common.unit') : 'Unit']: stock.unit,
-        [t('inventory.alertThreshold')]: p.alert_threshold,
-        [t('common.salePrice') !== 'common.salePrice' ? t('common.salePrice') : 'Sale price']: p.price,
-        [t('common.purchasePrice') !== 'common.purchasePrice' ? t('common.purchasePrice') : 'Purchase price']: p.purchase_price || 'N/A',
-        [t('common.stockValue') !== 'common.stockValue' ? t('common.stockValue') : 'Stock value']: stock.value * p.price,
-        [t('inventory.stockStatus')]: getStockStatus(p),
-        [t('common.active')]: p.is_active ? t('common.yes') : t('common.no')
+        'Produit': p.name,
+        'Catégorie': p.category,
+        'Stock': stock.value,
+        'Unité': stock.unit,
+        'Seuil d\'alerte': p.alert_threshold,
+        'Prix de vente': p.price,
+        'Prix d\'achat': p.purchase_price || 'N/A',
+        'Valeur stock': stock.value * p.price,
+        'Statut': getStockStatus(p),
+        'Actif': p.is_active ? 'Oui' : 'Non'
       };
     });
 
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, t('inventory.titleShort'));
+    XLSX.utils.book_append_sheet(wb, ws, 'Inventaire');
     XLSX.writeFile(wb, `inventaire_${format(new Date(), 'yyyy-MM-dd_HHmm')}.xlsx`);
   };
 
   const exportToPDF = async () => {
-    if (isFreePlan) { toast({ title: t('inventory.premiumFeature'), description: t('inventory.premiumExports'), variant: "destructive" }); return; }
     const { data: settings } = await supabase
-      .from('companies')
+      .from('company_settings')
       .select('*')
-      .limit(1)
       .single();
     
     if (!settings) {
       toast({
-        title: t('common.error'),
-        description: t('inventory.settingsUnavailable'),
+        title: 'Erreur',
+        description: 'Paramètres de l\'entreprise non disponibles',
         variant: 'destructive'
       });
       return;
@@ -452,7 +441,7 @@ export const InventoryManagement = () => {
       };
     });
 
-    generateInventoryStockPDF(pdfProducts, { ...settings, company_name: settings.name } as unknown as CompanySettings, {
+    generateInventoryStockPDF(pdfProducts, settings as CompanySettings, {
       totalValueUSD: stats.totalValueUSD,
       totalValueHTG: stats.totalValueHTG,
       alertProducts: stats.alerteCount,
@@ -461,8 +450,8 @@ export const InventoryManagement = () => {
     });
 
     toast({
-      title: t('inventory.exportSuccess'),
-      description: t('inventory.pdfDownloaded')
+      title: 'Export réussi',
+      description: 'Le rapport PDF a été téléchargé'
     });
   };
 
@@ -477,13 +466,13 @@ export const InventoryManagement = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'rupture':
-        return <Badge variant="destructive" className="flex items-center gap-1"><XCircle className="w-3 h-3" /> {t('inventory.badgeRupture')}</Badge>;
+        return <Badge variant="destructive" className="flex items-center gap-1"><XCircle className="w-3 h-3" /> Rupture</Badge>;
       case 'alerte':
-        return <Badge variant="outline" className="flex items-center gap-1 border-orange-500 text-orange-500"><AlertTriangle className="w-3 h-3" /> {t('inventory.badgeAlerte')}</Badge>;
+        return <Badge variant="outline" className="flex items-center gap-1 border-orange-500 text-orange-500"><AlertTriangle className="w-3 h-3" /> Alerte</Badge>;
       case 'eleve':
-        return <Badge variant="outline" className="flex items-center gap-1 border-blue-500 text-blue-500"><CheckCircle className="w-3 h-3" /> {t('inventory.badgeEleve')}</Badge>;
+        return <Badge variant="outline" className="flex items-center gap-1 border-blue-500 text-blue-500"><CheckCircle className="w-3 h-3" /> Élevé</Badge>;
       default:
-        return <Badge variant="secondary" className="flex items-center gap-1"><CheckCircle className="w-3 h-3" /> {t('inventory.badgeNormal')}</Badge>;
+        return <Badge variant="secondary" className="flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Normal</Badge>;
     }
   };
 
@@ -494,22 +483,22 @@ export const InventoryManagement = () => {
         <div>
           <h2 className="text-lg sm:text-2xl font-bold text-foreground flex items-center gap-2">
             <Warehouse className="w-5 h-5 sm:w-7 sm:h-7" />
-            <span className="hidden sm:inline">{t('inventory.title')}</span>
-            <span className="sm:hidden">{t('inventory.titleShort')}</span>
+            <span className="hidden sm:inline">Gestion d'Inventaire</span>
+            <span className="sm:hidden">Inventaire</span>
           </h2>
-          <p className="text-xs sm:text-base text-muted-foreground">{t('inventory.subtitle')}</p>
+          <p className="text-xs sm:text-base text-muted-foreground">Vue en temps réel du stock</p>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
           <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9" onClick={fetchProducts} disabled={loading}>
             <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
           <Button variant="outline" size="sm" className="flex-1 sm:flex-none h-8 sm:h-9 text-xs sm:text-sm" onClick={exportToExcel}>
-            {isFreePlan ? <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-2" /> : <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-2" />}
+            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
             <span className="hidden sm:inline">Excel</span>
             <span className="sm:hidden">XLS</span>
           </Button>
           <Button variant="outline" size="sm" className="flex-1 sm:flex-none h-8 sm:h-9 text-xs sm:text-sm" onClick={exportToPDF}>
-            {isFreePlan ? <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-2" /> : <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-2" />}
+            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
             PDF
           </Button>
         </div>
@@ -520,15 +509,15 @@ export const InventoryManagement = () => {
         <TabsList className="grid w-full max-w-lg grid-cols-3 h-8 sm:h-9">
           <TabsTrigger value="standard" className="gap-2">
             <List className="w-4 h-4" />
-            <span className="hidden sm:inline">{t('inventory.tabStandard')}</span>
+            <span className="hidden sm:inline">Inventaire</span>
           </TabsTrigger>
           <TabsTrigger value="quick" className="gap-2">
             <ScanLine className="w-4 h-4" />
-            <span className="hidden sm:inline">{t('inventory.quickMode')}</span>
+            <span className="hidden sm:inline">Scan Rapide</span>
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-2">
             <RefreshCw className="w-4 h-4" />
-            <span className="hidden sm:inline">{t('inventory.history')}</span>
+            <span className="hidden sm:inline">Historique</span>
           </TabsTrigger>
         </TabsList>
 
@@ -553,13 +542,13 @@ export const InventoryManagement = () => {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <p className="text-[10px] sm:text-sm text-muted-foreground flex items-center gap-1 cursor-help">
-                        <span className="hidden sm:inline">{t('inventory.estimatedValue')}</span>
-                        <span className="sm:hidden">{t('inventory.valueShort')}</span>
+                        <span className="hidden sm:inline">Valeur estimée</span>
+                        <span className="sm:hidden">Valeur</span>
                         <Info className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       </p>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="text-xs">{t('inventory.estimatedValueTooltip')}</p>
+                      <p className="text-xs">Valeur théorique si tout le stock était vendu au prix actuel</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -581,7 +570,7 @@ export const InventoryManagement = () => {
           <CardContent className="pt-3 sm:pt-6 px-3 sm:px-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] sm:text-sm text-muted-foreground">{t('inventory.products')}</p>
+                <p className="text-[10px] sm:text-sm text-muted-foreground">Produits</p>
                 <p className="text-sm sm:text-xl font-bold">{stats.totalProducts}</p>
               </div>
               <Package className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500 opacity-50" />
@@ -593,7 +582,7 @@ export const InventoryManagement = () => {
           <CardContent className="pt-3 sm:pt-6 px-3 sm:px-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] sm:text-sm text-muted-foreground">{t('inventory.inAlert')}</p>
+                <p className="text-[10px] sm:text-sm text-muted-foreground">En alerte</p>
                 <p className="text-sm sm:text-xl font-bold text-orange-500">{stats.alerteCount}</p>
               </div>
               <AlertTriangle className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500 opacity-50" />
@@ -605,7 +594,7 @@ export const InventoryManagement = () => {
           <CardContent className="pt-3 sm:pt-6 px-3 sm:px-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] sm:text-sm text-muted-foreground">{t('inventory.outOfStockCount')}</p>
+                <p className="text-[10px] sm:text-sm text-muted-foreground">En rupture</p>
                 <p className="text-sm sm:text-xl font-bold text-destructive">{stats.ruptureCount}</p>
               </div>
               <TrendingDown className="w-6 h-6 sm:w-8 sm:h-8 text-destructive opacity-50" />
@@ -621,7 +610,7 @@ export const InventoryManagement = () => {
             <div className="relative">
               <Search className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
               <Input
-                placeholder={t('inventory.searchPlaceholder')}
+                placeholder="Rechercher..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-8 sm:pl-9 h-8 sm:h-9 text-xs sm:text-sm"
@@ -630,10 +619,10 @@ export const InventoryManagement = () => {
             <div className="grid grid-cols-3 gap-1.5 sm:gap-4">
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                 <SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm">
-                  <SelectValue placeholder={t('inventory.category')} />
+                  <SelectValue placeholder="Catégorie" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{t('inventory.allCategories')}</SelectItem>
+                  <SelectItem value="all">Toutes</SelectItem>
                   {categories.map(cat => (
                     <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                   ))}
@@ -641,24 +630,24 @@ export const InventoryManagement = () => {
               </Select>
               <Select value={stockLevel} onValueChange={(v) => setStockLevel(v as StockLevel)}>
                 <SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm">
-                  <SelectValue placeholder={t('inventory.stock')} />
+                  <SelectValue placeholder="Stock" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{t('inventory.allStocks')}</SelectItem>
-                  <SelectItem value="rupture">{t('inventory.stockLevelRupture')}</SelectItem>
-                  <SelectItem value="alerte">{t('inventory.stockLevelAlerte')}</SelectItem>
-                  <SelectItem value="normal">{t('inventory.stockLevelNormal')}</SelectItem>
-                  <SelectItem value="eleve">{t('inventory.stockLevelEleve')}</SelectItem>
+                  <SelectItem value="all">Tous</SelectItem>
+                  <SelectItem value="rupture">Rupture</SelectItem>
+                  <SelectItem value="alerte">Alerte</SelectItem>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="eleve">Élevé</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm">
-                  <SelectValue placeholder={t('inventory.stockStatus')} />
+                  <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{t('inventory.allStocks')}</SelectItem>
-                  <SelectItem value="active">{t('inventory.statusActive')}</SelectItem>
-                  <SelectItem value="inactive">{t('inventory.statusInactive')}</SelectItem>
+                  <SelectItem value="all">Tous</SelectItem>
+                  <SelectItem value="active">Actifs</SelectItem>
+                  <SelectItem value="inactive">Inactifs</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -671,10 +660,10 @@ export const InventoryManagement = () => {
         <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-3">
             <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-              {t('inventory.productCount', { count: filteredProducts.length })}
+              {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''}
               {selectedProducts.size > 0 && (
                 <Badge variant="secondary" className="ml-1 sm:ml-2 text-[10px] sm:text-xs">
-                  {selectedProducts.size} {t('inventory.selectedShort')}
+                  {selectedProducts.size} sél.
                 </Badge>
               )}
             </CardTitle>
@@ -686,7 +675,7 @@ export const InventoryManagement = () => {
                 className="hidden sm:flex h-7 sm:h-8 text-xs"
               >
                 <List className="w-3.5 h-3.5 mr-1" />
-                {t('inventory.table')}
+                Tableau
               </Button>
               <Button 
                 variant={viewMode === 'cards' ? 'default' : 'outline'} 
@@ -695,7 +684,7 @@ export const InventoryManagement = () => {
                 className="h-7 sm:h-8 text-xs"
               >
                 <LayoutGrid className="w-3.5 h-3.5 sm:mr-1" />
-                <span className="hidden sm:inline">{t('inventory.cards')}</span>
+                <span className="hidden sm:inline">Cartes</span>
               </Button>
             </div>
           </div>
@@ -710,7 +699,7 @@ export const InventoryManagement = () => {
                 </div>
               ) : paginatedProducts.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  {t('inventory.noProductsFound')}
+                  Aucun produit trouvé
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -733,7 +722,7 @@ export const InventoryManagement = () => {
                               <div className="flex flex-wrap gap-1 mt-1">
                                 <Badge variant="outline" className="text-xs">{product.category}</Badge>
                                 {!product.is_active && (
-                                  <Badge variant="outline" className="text-xs">{t('inventory.inactive')}</Badge>
+                                  <Badge variant="outline" className="text-xs">Inactif</Badge>
                                 )}
                               </div>
                             </div>
@@ -742,7 +731,7 @@ export const InventoryManagement = () => {
                           
                           <div className="space-y-2">
                             <div className="flex justify-between items-center">
-                              <span className="text-sm text-muted-foreground">{t('inventory.stock')}</span>
+                              <span className="text-sm text-muted-foreground">Stock</span>
                               <span className={`font-mono font-semibold ${
                                 status === 'rupture' ? 'text-destructive' :
                                 status === 'alerte' ? 'text-orange-500' : ''
@@ -751,7 +740,7 @@ export const InventoryManagement = () => {
                               </span>
                             </div>
                             <div className="flex justify-between items-center">
-                              <span className="text-sm text-muted-foreground">{t('inventory.alertThreshold')}</span>
+                              <span className="text-sm text-muted-foreground">Seuil d'alerte</span>
                               <span className="text-sm">{product.alert_threshold}</span>
                             </div>
                           </div>
@@ -803,25 +792,25 @@ export const InventoryManagement = () => {
                       </TableHead>
                       <TableHead className="cursor-pointer" onClick={() => handleSort('name')}>
                         <div className="flex items-center gap-1">
-                          {t('inventory.product')}
+                          Produit
                           <ArrowUpDown className="w-3 h-3" />
                         </div>
                       </TableHead>
                       <TableHead className="cursor-pointer hidden md:table-cell" onClick={() => handleSort('category')}>
                         <div className="flex items-center gap-1">
-                          {t('inventory.category')}
+                          Catégorie
                           <ArrowUpDown className="w-3 h-3" />
                         </div>
                       </TableHead>
                       <TableHead className="cursor-pointer text-right" onClick={() => handleSort('quantity')}>
                         <div className="flex items-center justify-end gap-1">
-                          {t('inventory.stock')}
+                          Stock
                           <ArrowUpDown className="w-3 h-3" />
                         </div>
                       </TableHead>
-                      <TableHead className="text-right hidden sm:table-cell">{t('inventory.thresholdShort')}</TableHead>
-                      <TableHead className="hidden sm:table-cell">{t('inventory.stockStatus')}</TableHead>
-                      <TableHead className="text-right">{t('common.actions')}</TableHead>
+                      <TableHead className="text-right hidden sm:table-cell">Seuil</TableHead>
+                      <TableHead className="hidden sm:table-cell">Statut</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -834,7 +823,7 @@ export const InventoryManagement = () => {
                     ) : paginatedProducts.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                          {t('inventory.noProductsFound')}
+                          Aucun produit trouvé
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -857,7 +846,7 @@ export const InventoryManagement = () => {
                               <div className="flex flex-col">
                                 <span>{product.name}</span>
                                 {!product.is_active && (
-                                  <Badge variant="outline" className="mt-1 text-xs w-fit">{t('inventory.inactive')}</Badge>
+                                  <Badge variant="outline" className="mt-1 text-xs w-fit">Inactif</Badge>
                                 )}
                                 <div className="flex flex-wrap gap-1 mt-1 md:hidden">
                                   <Badge variant="outline" className="text-xs">{product.category}</Badge>
@@ -890,7 +879,7 @@ export const InventoryManagement = () => {
                                   size="icon"
                                   className="h-8 w-8"
                                   onClick={() => openAdjustmentModal(product, 'add')}
-                                  title={t('inventory.actionAdd')}
+                                  title="Ajouter du stock"
                                 >
                                   <Plus className="w-4 h-4 text-green-500" />
                                 </Button>
@@ -899,7 +888,7 @@ export const InventoryManagement = () => {
                                   size="icon"
                                   className="h-8 w-8"
                                   onClick={() => openAdjustmentModal(product, 'remove')}
-                                  title={t('inventory.actionRemove')}
+                                  title="Retirer du stock"
                                 >
                                   <Minus className="w-4 h-4 text-red-500" />
                                 </Button>
@@ -908,7 +897,7 @@ export const InventoryManagement = () => {
                                   size="icon"
                                   className="h-8 w-8"
                                   onClick={() => openAdjustmentModal(product, 'adjust')}
-                                  title={t('inventory.actionAdjust')}
+                                  title="Ajuster le stock"
                                 >
                                   <Edit className="w-4 h-4" />
                                 </Button>
@@ -941,9 +930,9 @@ export const InventoryManagement = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {adjustmentModal.type === 'add' && t('inventory.addStock')}
-              {adjustmentModal.type === 'remove' && t('inventory.removeStock')}
-              {adjustmentModal.type === 'adjust' && t('inventory.adjustStock')}
+              {adjustmentModal.type === 'add' && 'Ajouter du stock'}
+              {adjustmentModal.type === 'remove' && 'Retirer du stock'}
+              {adjustmentModal.type === 'adjust' && 'Ajuster le stock'}
             </DialogTitle>
           </DialogHeader>
           
@@ -953,7 +942,7 @@ export const InventoryManagement = () => {
             const isIron = product.category === 'fer';
             
             // Unité d'entrée: boîtes pour céramique, barres pour fer, unité standard sinon
-            const inputUnit = isCeramic ? t('inventory.unitBoxes') : (isIron ? t('inventory.unitBars') : (product.unit || t('inventory.unitDefault')));
+            const inputUnit = isCeramic ? 'boîtes' : (isIron ? 'barres' : (product.unit || 'unités'));
             const currentRaw = isCeramic && product.stock_boite !== null && product.stock_boite > 0 
               ? product.stock_boite 
               : (isIron && product.stock_barre !== null && product.stock_barre > 0 
@@ -980,7 +969,7 @@ export const InventoryManagement = () => {
                 <div className="p-3 bg-muted rounded-lg">
                   <p className="font-medium">{product.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {t('inventory.currentStock')}: {currentRaw.toFixed(2)} {inputUnit}
+                    Stock actuel: {currentRaw.toFixed(2)} {inputUnit}
                     {isCeramic && product.surface_par_boite && (
                       <span className="ml-1">({displayStock.value.toFixed(2)} m²)</span>
                     )}
@@ -989,7 +978,7 @@ export const InventoryManagement = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="quantity">
-                    {adjustmentModal.type === 'adjust' ? t('inventory.newQuantity') : t('inventory.quantity')} ({inputUnit})
+                    {adjustmentModal.type === 'adjust' ? 'Nouvelle quantité' : 'Quantité'} ({inputUnit})
                   </Label>
                   <Input
                     id="quantity"
@@ -998,22 +987,22 @@ export const InventoryManagement = () => {
                     step="0.01"
                     value={adjustmentQuantity}
                     onChange={(e) => setAdjustmentQuantity(e.target.value)}
-                    placeholder={adjustmentModal.type === 'adjust' ? t('inventory.quantityPlaceholderAdjust') : t('inventory.quantityPlaceholderAdd')}
+                    placeholder={adjustmentModal.type === 'adjust' ? 'Ex: 50' : 'Ex: 10'}
                   />
                   {isCeramic && product.surface_par_boite && (
                     <p className="text-xs text-muted-foreground">
-                      {t('inventory.boxEqualsM2', { value: product.surface_par_boite })}
+                      1 boîte = {product.surface_par_boite} m²
                     </p>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="reason">{t('inventory.reasonRequired')}</Label>
+                  <Label htmlFor="reason">Raison *</Label>
                   <Textarea
                     id="reason"
                     value={adjustmentReason}
                     onChange={(e) => setAdjustmentReason(e.target.value)}
-                    placeholder={t('inventory.reasonPlaceholder')}
+                    placeholder="Ex: Réception commande #123, Inventaire annuel, Perte/Casse..."
                     rows={3}
                   />
                 </div>
@@ -1021,7 +1010,7 @@ export const InventoryManagement = () => {
                 {adjustmentQuantity && (
                   <div className="p-3 bg-primary/10 rounded-lg">
                     <p className="text-sm">
-                      {t('inventory.newStock')}: <span className="font-bold">{newRaw.toFixed(2)}</span> {inputUnit}
+                      Nouveau stock: <span className="font-bold">{newRaw.toFixed(2)}</span> {inputUnit}
                       {isCeramic && product.surface_par_boite && (
                         <span className="ml-1">(<span className="font-bold">{newDisplay.toFixed(2)}</span> m²)</span>
                       )}
@@ -1034,11 +1023,11 @@ export const InventoryManagement = () => {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setAdjustmentModal({ open: false, product: null, type: 'add' })}>
-              {t('common.cancel')}
+              Annuler
             </Button>
             <Button onClick={handleAdjustment} disabled={adjustmentLoading || !adjustmentQuantity || !adjustmentReason}>
               {adjustmentLoading ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : null}
-              {t('common.confirm')}
+              Confirmer
             </Button>
           </DialogFooter>
         </DialogContent>

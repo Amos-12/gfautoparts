@@ -19,7 +19,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Package, Plus, Edit, Trash2, AlertCircle, Search, Filter, LayoutGrid, List, Download, FileText, DollarSign, CheckCircle, XCircle, RotateCcw, Lock } from 'lucide-react';
+import { Package, Plus, Edit, Trash2, AlertCircle, Search, Filter, LayoutGrid, List, Download, FileText, DollarSign, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -27,9 +27,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCategories, useSousCategories, useSpecificationsModeles } from '@/hooks/useCategories';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/table-pagination';
-import { useSubscription } from '@/hooks/useSubscription';
-import { useTranslation } from 'react-i18next';
-import { formatLocalizedDate } from '@/lib/locale';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 
@@ -48,10 +45,12 @@ interface Product {
   currency: 'USD' | 'HTG';
   description?: string;
   created_at: string;
+  // Ceramic-specific fields
   dimension?: string;
   surface_par_boite?: number;
   prix_m2?: number;
   stock_boite?: number;
+  // Iron bar-specific fields
   diametre?: string;
   longueur_barre?: number;
   longueur_barre_ft?: number;
@@ -60,16 +59,20 @@ interface Product {
   prix_par_barre?: number;
   stock_barre?: number;
   decimal_autorise?: boolean;
+  // Energy-specific fields
   puissance?: number;
   voltage?: number;
   capacite?: number;
   type_energie?: string;
   specifications_techniques?: any;
+  // Blocs-specific fields
   bloc_type?: string;
   bloc_poids?: number;
+  // Vêtements-specific fields
   vetement_taille?: string;
   vetement_genre?: string;
   vetement_couleur?: string;
+  // Électroménager-specific fields
   electromenager_sous_categorie?: string;
   electromenager_marque?: string;
   electromenager_modele?: string;
@@ -84,8 +87,7 @@ interface Product {
 type ProductCategory = 'alimentaires' | 'boissons' | 'gazeuses' | 'electronique' | 'autres' | 'ceramique' | 'fer' | 'materiaux_de_construction' | 'energie' | 'blocs' | 'vetements' | 'electromenager';
 
 export const ProductManagement = () => {
-  const { t } = useTranslation();
-  const { user, role, profile } = useAuth();
+  const { user, role } = useAuth();
   const isAdmin = role === 'admin';
   const isMobile = useIsMobile();
   const { categories: dynamicCategories } = useCategories();
@@ -107,30 +109,36 @@ export const ProductManagement = () => {
     productName: ''
   });
   
+  // Auto-switch to cards on mobile
   useEffect(() => {
     if (isMobile) setViewMode('cards');
   }, [isMobile]);
-
+  // Form state for dynamic category selection
   const [selectedCategorieId, setSelectedCategorieId] = useState<string>('');
   const [selectedSousCategorieId, setSelectedSousCategorieId] = useState<string>('');
   const [dynamicSpecs, setDynamicSpecs] = useState<Record<string, any>>({});
   
+  // Get specifications for the selected sous-categorie
   const { specifications: specModeles } = useSpecificationsModeles(selectedSousCategorieId || undefined);
   
+  // Filter sous-categories based on selected category
   const filteredSousCategories = useMemo(() => {
     if (!selectedCategorieId) return [];
     return allSousCategories.filter(sc => sc.categorie_id === selectedCategorieId);
   }, [selectedCategorieId, allSousCategories]);
   
+  // Filter sous-categories for the filter dropdown
   const filterSousCategories = useMemo(() => {
     if (categoryFilter === 'all') return allSousCategories;
     return allSousCategories.filter(sc => sc.categorie_id === categoryFilter);
   }, [categoryFilter, allSousCategories]);
   
+  // Reset sous-category filter when category changes
   useEffect(() => {
     setSousCategoryFilter('all');
   }, [categoryFilter]);
   
+  // Reset form sous-category when form category changes
   useEffect(() => {
     setSelectedSousCategorieId('');
     setDynamicSpecs({});
@@ -212,6 +220,7 @@ export const ProductManagement = () => {
     vetement_taille: '',
     vetement_genre: '',
     vetement_couleur: '',
+    // Électroménager fields
     electromenager_sous_categorie: '',
     electromenager_marque: '',
     electromenager_modele: '',
@@ -224,26 +233,51 @@ export const ProductManagement = () => {
     currency: 'HTG' as const
   });
 
+  // Fonction pour afficher le stock selon la catégorie du produit
   const getStockDisplay = (product: Product) => {
+    // Arrondi à 2 décimales pour éviter les erreurs de virgule flottante
     const round2 = (val: number) => Math.round(val * 100) / 100;
     
+    // Céramique: utiliser stock_boite si défini et > 0
     if (product.category === 'ceramique' && product.stock_boite !== null && product.stock_boite !== undefined && product.stock_boite > 0 && product.surface_par_boite) {
       const m2 = round2(product.stock_boite * product.surface_par_boite);
       return { value: m2.toFixed(2), unit: 'm²', raw: product.stock_boite };
     }
+    // Fer: utiliser stock_barre si défini et > 0
     if (product.category === 'fer' && product.stock_barre !== null && product.stock_barre !== undefined && product.stock_barre > 0) {
-      return { value: product.stock_barre.toString(), unit: t('products.iron.stockBars').toLowerCase(), raw: product.stock_barre };
+      return { value: product.stock_barre.toString(), unit: 'barres', raw: product.stock_barre };
     }
-    return { value: product.quantity.toString(), unit: product.unit || t('stockAlerts.units'), raw: product.quantity };
+    // Par défaut: utiliser quantity
+    return { value: product.quantity.toString(), unit: product.unit || 'unités', raw: product.quantity };
   };
 
-  const categoryValues: ProductCategory[] = ['alimentaires', 'boissons', 'gazeuses', 'electronique', 'ceramique', 'fer', 'materiaux_de_construction', 'energie', 'blocs', 'vetements', 'electromenager', 'autres'];
+  // Pour la catégorie "Autres", afficher la sous-catégorie du produit si disponible
+  const getCategoryDisplay = (product: Product) => {
+    const sousCatId = (product as any).sous_categorie_id;
+    const sousCat = sousCatId ? allSousCategories.find(sc => sc.id === sousCatId) : undefined;
+    if (product.category === 'autres' && sousCat) return sousCat.nom;
+    return categories.find(c => c.value === product.category)?.label || product.category;
+  };
 
-  const getCategoryLabel = (value: string) => t(`products.categoryLabels.${value}`, value);
+  const categories = [
+    { value: 'alimentaires', label: 'Alimentaires' },
+    { value: 'boissons', label: 'Boissons' },
+    { value: 'gazeuses', label: 'Gazeuses' },
+    { value: 'electronique', label: 'Électronique' },
+    { value: 'ceramique', label: 'Céramique' },
+    { value: 'fer', label: 'Fer / Acier' },
+    { value: 'materiaux_de_construction', label: 'Matériaux de construction' },
+    { value: 'energie', label: 'Énergie' },
+    { value: 'blocs', label: 'Blocs' },
+    { value: 'vetements', label: 'Vêtements' },
+    { value: 'electromenager', label: 'Électroménager' },
+    { value: 'autres', label: 'Autres' }
+  ];
 
   useEffect(() => {
     fetchProducts();
     
+    // Écouter les changements en temps réel sur la table products
     const channel = supabase
       .channel('products-realtime-sync')
       .on(
@@ -263,20 +297,27 @@ export const ProductManagement = () => {
 
   useEffect(() => {
     const filtered = products.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.category.toLowerCase().includes(searchTerm.toLowerCase());
+      const search = searchTerm.trim().toLowerCase();
+      const matchesSearch = search === '' ||
+        product.name.toLowerCase().includes(search) ||
+        product.category.toLowerCase().includes(search) ||
+        (product.barcode ? product.barcode.toLowerCase().includes(search) : false);
       
+      // Dynamic category filter
       const matchesCategory = categoryFilter === 'all' || 
         (product as any).categorie_id === categoryFilter ||
         product.category === categoryFilter;
       
+      // Dynamic sous-category filter  
       const matchesSousCategory = sousCategoryFilter === 'all' || 
         (product as any).sous_categorie_id === sousCategoryFilter;
       
+      // Status filter
       const matchesStatus = statusFilter === 'all' || 
         (statusFilter === 'active' && product.is_active) ||
         (statusFilter === 'inactive' && !product.is_active);
       
+      // Currency filter
       const matchesCurrency = currencyFilter === 'all' || product.currency === currencyFilter;
       
       return matchesSearch && matchesCategory && matchesSousCategory && matchesStatus && matchesCurrency;
@@ -306,6 +347,7 @@ export const ProductManagement = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+      // Cast currency to expected type (database returns string)
       setProducts((data || []).map(p => ({
         ...p,
         currency: (p.currency === 'USD' ? 'USD' : 'HTG') as 'USD' | 'HTG'
@@ -313,8 +355,8 @@ export const ProductManagement = () => {
     } catch (error) {
       console.error('Error fetching products:', error);
       toast({
-        title: t('common.error'),
-        description: t('common.loadError'),
+        title: "Erreur",
+        description: "Impossible de charger les produits",
         variant: "destructive"
       });
     } finally {
@@ -322,48 +364,44 @@ export const ProductManagement = () => {
     }
   };
 
+  // Export to Excel
   const exportToExcel = () => {
-    if (isFreePlan) {
-      toast({ title: t('common.premiumFeature'), description: t('common.premiumExportExcel'), variant: "destructive" });
-      return;
-    }
     const exportData = filteredProducts.map(p => {
       const stock = getStockDisplay(p);
       return {
-        [t('products.tableHeaders.name')]: p.name,
-        [t('products.tableHeaders.barcode')]: p.barcode || '-',
-        [t('products.tableHeaders.category')]: getCategoryLabel(p.category),
-        [t('products.tableHeaders.price')]: p.price,
-        [t('products.tableHeaders.currency')]: p.currency,
-        [t('products.tableHeaders.stock')]: `${stock.value} ${stock.unit}`,
-        [t('products.tableHeaders.threshold')]: p.alert_threshold,
-        [t('products.tableHeaders.status')]: p.is_active ? t('common.active') : t('common.inactive'),
-        [t('products.tableHeaders.saleType')]: p.sale_type === 'retail' ? t('products.retail') : t('products.wholesale')
+        'Nom': p.name,
+        'Code-barres': p.barcode || '-',
+        'Catégorie': categories.find(c => c.value === p.category)?.label || p.category,
+        'Prix': p.price,
+        'Devise': p.currency,
+        'Stock': `${stock.value} ${stock.unit}`,
+        'Seuil alerte': p.alert_threshold,
+        'Statut': p.is_active ? 'Actif' : 'Inactif',
+        'Type vente': p.sale_type === 'retail' ? 'Détail' : 'Gros'
       };
     });
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, t('products.titleShort'));
+    XLSX.utils.book_append_sheet(wb, ws, 'Produits');
     XLSX.writeFile(wb, `produits_${new Date().toISOString().split('T')[0]}.xlsx`);
-    toast({ title: t('common.exportSuccess'), description: t('products.exportedExcel', { count: filteredProducts.length }) });
+    toast({ title: "Export réussi", description: `${filteredProducts.length} produits exportés en Excel` });
   };
 
+  // Export to PDF
   const exportToPDF = async () => {
-    if (isFreePlan) {
-      toast({ title: t('common.premiumFeature'), description: t('common.premiumExportPdf'), variant: "destructive" });
-      return;
-    }
     const pdf = new jsPDF('l', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.getWidth();
     
+    // Header
     pdf.setFontSize(16);
     pdf.setFont('helvetica', 'bold');
-    pdf.text(t('products.pdfTitle'), pageWidth / 2, 15, { align: 'center' });
+    pdf.text('Liste des Produits', pageWidth / 2, 15, { align: 'center' });
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(t('products.pdfExportDate', { date: formatLocalizedDate(new Date()), count: filteredProducts.length }), pageWidth / 2, 22, { align: 'center' });
+    pdf.text(`Exporté le ${new Date().toLocaleDateString('fr-FR')} - ${filteredProducts.length} produits`, pageWidth / 2, 22, { align: 'center' });
     
-    const headers = [t('products.tableHeaders.name'), t('products.tableHeaders.category'), t('products.tableHeaders.price'), t('products.tableHeaders.currency'), t('products.tableHeaders.stock'), t('products.tableHeaders.status')];
+    // Table headers
+    const headers = ['Nom', 'Catégorie', 'Prix', 'Devise', 'Stock', 'Statut'];
     const colWidths = [80, 50, 35, 25, 40, 25];
     let y = 35;
     let x = 15;
@@ -377,6 +415,7 @@ export const ProductManagement = () => {
       x += colWidths[i];
     });
     
+    // Table rows
     y += 8;
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(8);
@@ -397,11 +436,11 @@ export const ProductManagement = () => {
       
       const row = [
         p.name.substring(0, 35),
-        getCategoryLabel(p.category).substring(0, 20),
+        (categories.find(c => c.value === p.category)?.label || p.category).substring(0, 20),
         p.price.toFixed(2),
         p.currency,
         `${stock.value} ${stock.unit}`,
-        p.is_active ? t('common.active') : t('common.inactive')
+        p.is_active ? 'Actif' : 'Inactif'
       ];
       
       row.forEach((cell, i) => {
@@ -412,18 +451,20 @@ export const ProductManagement = () => {
     });
     
     pdf.save(`produits_${new Date().toISOString().split('T')[0]}.pdf`);
-    toast({ title: t('common.exportSuccess'), description: t('products.exportedPdf', { count: filteredProducts.length }) });
+    toast({ title: "Export réussi", description: `${filteredProducts.length} produits exportés en PDF` });
   };
 
+  // Reset all filters
   const resetFilters = () => {
     setSearchTerm('');
     setCategoryFilter('all');
     setSousCategoryFilter('all');
     setStatusFilter('all');
     setCurrencyFilter('all');
-    toast({ title: t('common.filtersReset') });
+    toast({ title: "Filtres réinitialisés" });
   };
 
+  // Check if any filter is active
   const hasActiveFilters = searchTerm !== '' || categoryFilter !== 'all' || sousCategoryFilter !== 'all' || statusFilter !== 'all' || currencyFilter !== 'all';
 
   const resetForm = () => {
@@ -472,6 +513,7 @@ export const ProductManagement = () => {
       currency: 'HTG'
     });
     setEditingProduct(null);
+    // Reset dynamic fields
     setSelectedCategorieId('');
     setSelectedSousCategorieId('');
     setDynamicSpecs({});
@@ -480,14 +522,15 @@ export const ProductManagement = () => {
   const handleEdit = (product: Product) => {
     if (!isAdmin) {
       toast({
-        title: t('common.unauthorized'),
-        description: t('products.adminOnlyEdit'),
+        title: "Action non autorisée",
+        description: "Seuls les administrateurs peuvent modifier les produits",
         variant: "destructive"
       });
       return;
     }
     
     setEditingProduct(product);
+    // Set dynamic category fields
     setSelectedCategorieId((product as any).categorie_id || '');
     setSelectedSousCategorieId((product as any).sous_categorie_id || '');
     setDynamicSpecs(product.specifications_techniques || {});
@@ -539,8 +582,6 @@ export const ProductManagement = () => {
     setIsDialogOpen(true);
   };
 
-  const { maxProducts, plan, isFreePlan } = useSubscription();
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -548,90 +589,122 @@ export const ProductManagement = () => {
 
     if (!isAdmin) {
       toast({
-        title: t('common.unauthorized'),
-        description: t('products.adminOnlyManage'),
+        title: "Action non autorisée",
+        description: "Seuls les administrateurs peuvent gérer les produits",
         variant: "destructive"
       });
       return;
     }
 
-    if (!editingProduct && products.length >= maxProducts) {
-      toast({
-        title: t('products.limitReached'),
-        description: t('products.limitReachedDesc', { plan: isFreePlan ? t('common.freeplan') : plan, max: maxProducts }),
-        variant: "destructive"
-      });
-      return;
-    }
-
+    // Validation for ceramic products
     if (formData.category === 'ceramique') {
       if (!formData.dimension || !formData.surface_par_boite || !formData.prix_m2 || !formData.prix_achat_m2 || !formData.stock_boite) {
         toast({
-          title: t('common.validationError'),
-          description: t('products.validation.ceramicRequired'),
+          title: "Erreur de validation",
+          description: "Veuillez remplir tous les champs obligatoires pour la céramique (incluant prix d'achat)",
           variant: "destructive"
         });
         return;
       }
     }
 
+    // Validation for iron products
     if (formData.category === 'fer') {
       if (!formData.diametre || !formData.longueur_barre_ft || !formData.bars_per_ton || !formData.prix_par_barre || !formData.stock_barre) {
         toast({
-          title: t('common.validationError'),
-          description: t('products.validation.ironRequired'),
+          title: "Erreur de validation",
+          description: "Veuillez remplir tous les champs obligatoires pour le fer",
           variant: "destructive"
         });
         return;
       }
     }
 
+    // Validation for blocs
     if (formData.category === 'blocs') {
       if (!formData.bloc_type) {
         toast({
-          title: t('common.validationError'),
-          description: t('products.validation.blocTypeRequired'),
+          title: "Erreur de validation",
+          description: "Veuillez sélectionner le type de bloc",
           variant: "destructive"
         });
         return;
       }
     }
 
+    // Validation for vetements
     if (formData.category === 'vetements') {
       if (!formData.vetement_taille || !formData.vetement_genre || !formData.vetement_couleur) {
         toast({
-          title: t('common.validationError'),
-          description: t('products.validation.clothingRequired'),
+          title: "Erreur de validation",
+          description: "Veuillez remplir tous les champs obligatoires pour les vêtements",
           variant: "destructive"
         });
         return;
       }
     }
 
+    // Validation for energie
     if (formData.category === 'energie') {
       if (!formData.puissance && !formData.voltage && !formData.capacite) {
         toast({
-          title: t('common.validationError'),
-          description: t('products.validation.energyRequired'),
+          title: "Erreur de validation",
+          description: "Veuillez remplir au moins un champ technique (puissance, voltage ou capacité) pour les produits d'énergie",
           variant: "destructive"
         });
         return;
       }
     }
 
+    // Validation for standard products
     if (formData.category !== 'ceramique' && formData.category !== 'fer') {
       if (!formData.price || !formData.quantity) {
         toast({
-          title: t('common.validationError'),
-          description: t('products.validation.priceQuantityRequired'),
+          title: "Erreur de validation",
+          description: "Veuillez remplir le prix et la quantité",
           variant: "destructive"
         });
         return;
+      }
+    }
+
+    // Garde-fou : le prix d'achat ne doit jamais dépasser le prix de vente
+    // (même unité et même devise), sinon les bénéfices deviennent négatifs.
+    {
+      const salePrice =
+        formData.category === 'ceramique'
+          ? parseFloat(formData.prix_m2)
+          : formData.category === 'fer'
+            ? parseFloat(formData.prix_par_barre)
+            : parseFloat(formData.price);
+      const buyPrice =
+        formData.category === 'ceramique'
+          ? parseFloat(formData.prix_achat_m2)
+          : parseFloat(formData.purchase_price);
+
+      if (Number.isFinite(salePrice) && Number.isFinite(buyPrice)) {
+        if (buyPrice < 0) {
+          toast({
+            title: "Erreur de validation",
+            description: "Le prix d'achat ne peut pas être négatif",
+            variant: "destructive"
+          });
+          return;
+        }
+        if (buyPrice > salePrice) {
+          const unitLabel =
+            formData.category === 'ceramique' ? 'par m²' : formData.category === 'fer' ? 'par barre' : "par unité";
+          toast({
+            title: "Prix d'achat supérieur au prix de vente",
+            description: `Le prix d'achat (${unitLabel}, en ${formData.currency}) doit être inférieur ou égal au prix de vente, sinon les bénéfices seront négatifs.`,
+            variant: "destructive"
+          });
+          return;
+        }
       }
     }
 
     try {
-      const companyId = (profile as any)?.company_id || '';
       const productData: any = {
         name: formData.name,
         barcode: formData.barcode || null,
@@ -642,7 +715,6 @@ export const ProductManagement = () => {
         is_active: formData.is_active,
         sale_type: formData.sale_type,
         created_by: user.id,
-        company_id: companyId,
         decimal_autorise: formData.decimal_autorise,
         puissance: formData.puissance ? parseFloat(formData.puissance) : null,
         voltage: formData.voltage ? parseFloat(formData.voltage) : null,
@@ -663,12 +735,16 @@ export const ProductManagement = () => {
         electromenager_materiau: formData.electromenager_materiau || null,
         electromenager_installation: formData.electromenager_installation || null,
         currency: formData.currency,
+        // New dynamic category fields
         categorie_id: selectedCategorieId || null,
         sous_categorie_id: selectedSousCategorieId || null,
+        // Dynamic specifications stored as JSONB
         specifications_techniques: Object.keys(dynamicSpecs).length > 0 ? dynamicSpecs : null
       };
 
+      // Map values based on category
       if (formData.category === 'ceramique') {
+        // Use ceramic-specific values
         productData.price = parseFloat(formData.prix_m2);
         productData.purchase_price = parseFloat(formData.prix_achat_m2);
         productData.quantity = parseFloat(formData.stock_boite);
@@ -677,6 +753,7 @@ export const ProductManagement = () => {
         productData.prix_m2 = parseFloat(formData.prix_m2);
         productData.stock_boite = parseFloat(formData.stock_boite);
       } else if (formData.category === 'fer') {
+        // Use iron bar-specific values
         productData.price = parseFloat(formData.prix_par_barre);
         productData.purchase_price = formData.purchase_price ? parseFloat(formData.purchase_price) : parseFloat(formData.prix_par_barre) * 0.7;
         productData.quantity = parseFloat(formData.stock_barre);
@@ -687,12 +764,14 @@ export const ProductManagement = () => {
         productData.prix_par_barre = parseFloat(formData.prix_par_barre);
         productData.stock_barre = parseFloat(formData.stock_barre);
       } else {
+        // Use standard values
         productData.price = parseFloat(formData.price);
         productData.purchase_price = formData.purchase_price ? parseFloat(formData.purchase_price) : null;
         productData.quantity = parseFloat(formData.quantity);
       }
 
       if (editingProduct) {
+        // Update existing product
         const { error } = await supabase
           .from('products')
           .update(productData)
@@ -701,13 +780,13 @@ export const ProductManagement = () => {
         if (error) throw error;
 
         toast({
-          title: t('products.productUpdated'),
-          description: t('products.productUpdatedDesc')
+          title: "Produit mis à jour",
+          description: "Le produit a été modifié avec succès"
         });
 
+        // Log the activity
         await (supabase as any).from('activity_logs').insert({
           user_id: user.id,
-          company_id: companyId,
           action_type: 'product_updated',
           entity_type: 'product',
           entity_id: editingProduct.id,
@@ -719,6 +798,7 @@ export const ProductManagement = () => {
           }
         });
       } else {
+        // Create new product
         const { data: newProduct, error } = await supabase
           .from('products')
           .insert([productData])
@@ -728,13 +808,13 @@ export const ProductManagement = () => {
         if (error) throw error;
 
         toast({
-          title: t('products.productCreated'),
-          description: t('products.productCreatedDesc')
+          title: "Produit créé",
+          description: "Le produit a été ajouté avec succès"
         });
 
+        // Log the activity
         await (supabase as any).from('activity_logs').insert({
           user_id: user.id,
-          company_id: companyId,
           action_type: 'product_added',
           entity_type: 'product',
           entity_id: newProduct.id,
@@ -753,16 +833,17 @@ export const ProductManagement = () => {
     } catch (error: any) {
       console.error('Error saving product:', error);
       
+      // Check for RLS policy violation
       if (error?.message?.includes('row-level security') || error?.message?.includes('policy')) {
         toast({
-          title: t('products.adminReserved'),
-          description: t('products.adminOnlyManage'),
+          title: "Action réservée aux administrateurs",
+          description: "Seuls les administrateurs peuvent gérer les produits",
           variant: "destructive"
         });
       } else {
         toast({
-          title: t('common.error'),
-          description: t('common.saveError'),
+          title: "Erreur",
+          description: "Impossible de sauvegarder le produit",
           variant: "destructive"
         });
       }
@@ -772,8 +853,8 @@ export const ProductManagement = () => {
   const handleDeleteClick = (id: string, name: string) => {
     if (!isAdmin) {
       toast({
-        title: t('common.unauthorized'),
-        description: t('products.adminOnlyDelete'),
+        title: "Action non autorisée",
+        description: "Seuls les administrateurs peuvent supprimer les produits",
         variant: "destructive"
       });
       return;
@@ -789,6 +870,7 @@ export const ProductManagement = () => {
       const productId = deleteDialog.productId;
       const productName = deleteDialog.productName;
 
+      // Check if product is used in any sales
       const { count, error: countError } = await supabase
         .from('sale_items')
         .select('*', { count: 'exact', head: true })
@@ -797,6 +879,7 @@ export const ProductManagement = () => {
       if (countError) throw countError;
 
       if (count && count > 0) {
+        // Product is used in sales - deactivate instead
         const { error } = await supabase
           .from('products')
           .update({ is_active: false })
@@ -805,13 +888,13 @@ export const ProductManagement = () => {
         if (error) throw error;
 
         toast({
-          title: t('products.productDeactivated'),
-          description: t('products.productDeactivatedDesc', { count }),
+          title: "Produit désactivé",
+          description: `Ce produit est utilisé dans ${count} vente(s). Il a été désactivé au lieu d'être supprimé.`,
         });
 
+        // Log deactivation
         await (supabase as any).from('activity_logs').insert({
           user_id: user.id,
-          company_id: (profile as any)?.company_id || '',
           action_type: 'product_deactivated',
           entity_type: 'product',
           entity_id: productId,
@@ -819,6 +902,7 @@ export const ProductManagement = () => {
           metadata: { product_name: productName, reason: 'used_in_sales', sales_count: count }
         });
       } else {
+        // Product not used - delete permanently
         const { error } = await supabase
           .from('products')
           .delete()
@@ -827,13 +911,13 @@ export const ProductManagement = () => {
         if (error) throw error;
 
         toast({
-          title: t('products.productDeleted'),
-          description: t('products.productDeletedDesc')
+          title: "Produit supprimé",
+          description: "Le produit a été définitivement supprimé"
         });
 
+        // Log deletion
         await (supabase as any).from('activity_logs').insert({
           user_id: user.id,
-          company_id: (profile as any)?.company_id || '',
           action_type: 'product_deleted',
           entity_type: 'product',
           entity_id: productId,
@@ -847,16 +931,17 @@ export const ProductManagement = () => {
     } catch (error: any) {
       console.error('Error deleting product:', error);
       
+      
       if (error?.message?.includes('row-level security') || error?.message?.includes('policy')) {
         toast({
-          title: t('products.adminReserved'),
-          description: t('products.adminOnlyDelete'),
+          title: "Action réservée aux administrateurs",
+          description: "Seuls les administrateurs peuvent supprimer les produits",
           variant: "destructive"
         });
       } else {
         toast({
-          title: t('common.error'),
-          description: t('common.deleteError'),
+          title: "Erreur",
+          description: "Impossible de supprimer le produit",
           variant: "destructive"
         });
       }
@@ -867,7 +952,7 @@ export const ProductManagement = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <Package className="w-8 h-8 text-primary animate-pulse" />
-        <span className="ml-2 text-muted-foreground">{t('common.loading')}</span>
+        <span className="ml-2 text-muted-foreground">Chargement...</span>
       </div>
     );
   }
@@ -879,15 +964,15 @@ export const ProductManagement = () => {
           <div className="mb-4 p-3 bg-muted border border-border rounded-lg flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              {t('products.adminOnlyNotice')}
+              Seuls les administrateurs peuvent ajouter, modifier ou supprimer des produits.
             </p>
           </div>
         )}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <CardTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            <span className="hidden sm:inline">{t('products.title')}</span>
-            <span className="sm:hidden">{t('products.titleShort')}</span>
+            <span className="hidden sm:inline">Gestion des Produits</span>
+            <span className="sm:hidden">Produits</span>
           </CardTitle>
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
@@ -895,68 +980,60 @@ export const ProductManagement = () => {
           }}>
             <DialogTrigger asChild>
               <Button 
-                size="sm" 
-                className="gap-2"
-                onClick={() => {
-                  if (!isAdmin) {
-                    toast({
-                      title: t('common.unauthorized'),
-                      description: t('products.adminOnlyManage'),
-                      variant: "destructive"
-                    });
-                    return;
-                  }
-                }}
+                className="gap-2 w-full sm:w-auto" 
                 disabled={!isAdmin}
+                title={!isAdmin ? "Réservé aux administrateurs" : "Ajouter un nouveau produit"}
               >
                 <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">{t('products.addProduct')}</span>
-                <span className="sm:hidden">{t('common.add')}</span>
+                <span className="hidden sm:inline">Nouveau produit</span>
+                <span className="sm:hidden">Nouveau</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto pointer-events-auto">
+            <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
-                  {editingProduct ? t('products.editProduct') : t('products.newProduct')}
+                  {editingProduct ? 'Modifier le produit' : 'Nouveau produit'}
                 </DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-6 pb-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="name">{t('products.productName')} *</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nom du produit *</Label>
                     <Input
                       id="name"
                       required
+                      autoFocus
                       value={formData.name}
                       onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      placeholder={t('products.productName')}
+                      placeholder="Nom du produit"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="barcode">{t('common.barcode')}</Label>
+                    <Label htmlFor="barcode">Code-barres</Label>
                     <Input
                       id="barcode"
                       value={formData.barcode}
                       onChange={(e) => setFormData({...formData, barcode: e.target.value})}
-                      placeholder={t('common.barcode')}
+                      placeholder="Scanner ou saisir le code-barres"
                     />
                   </div>
-
                   {/* Dynamic Category Selection */}
                   <div className="space-y-2">
-                    <Label>{t('products.dynamicCategory')} *</Label>
+                    <Label>Catégorie dynamique *</Label>
                     <Select
                       value={selectedCategorieId}
                       onValueChange={(value) => {
                         setSelectedCategorieId(value);
+                        // Find subcategory to set stock_type based unit
                         const cat = dynamicCategories.find(c => c.id === value);
                         if (cat) {
+                          // Also update old category field for compatibility
                           setFormData(prev => ({...prev, category: cat.slug as ProductCategory}));
                         }
                       }}
                     >
                       <SelectTrigger className="pointer-events-auto">
-                        <SelectValue placeholder={t('products.selectCategory')} />
+                        <SelectValue placeholder="Sélectionner une catégorie" />
                       </SelectTrigger>
                       <SelectContent className="pointer-events-auto z-[150] bg-popover">
                         {dynamicCategories.map(cat => (
@@ -968,13 +1045,14 @@ export const ProductManagement = () => {
                   
                   {/* Dynamic Sous-Category Selection */}
                   <div className="space-y-2">
-                    <Label>{t('products.subcategory')} *</Label>
+                    <Label>Sous-catégorie *</Label>
                     <Select
                       value={selectedSousCategorieId}
                       onValueChange={(value) => {
                         setSelectedSousCategorieId(value);
                         const sc = filteredSousCategories.find(s => s.id === value);
                         if (sc) {
+                          // Auto-set unit based on stock_type
                           let newUnit = formData.unit;
                           if (sc.stock_type === 'boite_m2') newUnit = 'm²';
                           else if (sc.stock_type === 'barre_metre') newUnit = 'barre';
@@ -985,7 +1063,7 @@ export const ProductManagement = () => {
                       disabled={!selectedCategorieId}
                     >
                       <SelectTrigger className="pointer-events-auto">
-                        <SelectValue placeholder={selectedCategorieId ? t('products.selectSubcategory') : t('products.chooseCategoryFirst')} />
+                        <SelectValue placeholder={selectedCategorieId ? "Sélectionner une sous-catégorie" : "Choisir d'abord une catégorie"} />
                       </SelectTrigger>
                       <SelectContent className="pointer-events-auto z-[150] bg-popover">
                         {filteredSousCategories.map(sc => (
@@ -995,18 +1073,18 @@ export const ProductManagement = () => {
                     </Select>
                     {selectedSousCategorieId && filteredSousCategories.find(sc => sc.id === selectedSousCategorieId)?.stock_type && (
                       <p className="text-xs text-muted-foreground">
-                        {t('products.stockType')}: {
-                          filteredSousCategories.find(sc => sc.id === selectedSousCategorieId)?.stock_type === 'boite_m2' ? t('products.stockTypeBoxM2') :
-                          filteredSousCategories.find(sc => sc.id === selectedSousCategorieId)?.stock_type === 'barre_metre' ? t('products.stockTypeBarMeter') :
-                          t('products.stockTypeSimple')
+                        Type de stock: {
+                          filteredSousCategories.find(sc => sc.id === selectedSousCategorieId)?.stock_type === 'boite_m2' ? 'Boîtes / m²' :
+                          filteredSousCategories.find(sc => sc.id === selectedSousCategorieId)?.stock_type === 'barre_metre' ? 'Barres / mètres' :
+                          'Quantité simple'
                         }
                       </p>
                     )}
                   </div>
 
-                  {/* Legacy Category Selection */}
+                  {/* Legacy Category Selection (hidden but kept for compatibility) */}
                   <div className="space-y-2">
-                    <Label htmlFor="category">{t('products.legacyCategory')} *</Label>
+                    <Label htmlFor="category">Catégorie (legacy) *</Label>
                     <Select
                       value={formData.category}
                       onValueChange={(value: ProductCategory) => {
@@ -1022,19 +1100,19 @@ export const ProductManagement = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="pointer-events-auto z-[150] bg-popover">
-                        {categoryValues.map(cat => (
-                          <SelectItem key={cat} value={cat}>
-                            {getCategoryLabel(cat)}
+                        {categories.map(cat => (
+                          <SelectItem key={cat.value} value={cat.value}>
+                            {cat.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {/* Dynamic Specifications */}
+                  {/* Dynamic Specifications from specifications_modeles */}
                   {specModeles.length > 0 && (
                     <div className="col-span-1 sm:col-span-2 p-4 border rounded-lg bg-muted/30">
-                      <h4 className="font-semibold text-sm mb-3">📋 {t('products.dynamicSpecs')}</h4>
+                      <h4 className="font-semibold text-sm mb-3">📋 Spécifications dynamiques</h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {specModeles.map(spec => (
                           <div key={spec.id} className="space-y-1">
@@ -1066,7 +1144,7 @@ export const ProductManagement = () => {
                                 onValueChange={(value) => setDynamicSpecs(prev => ({...prev, [spec.nom_champ]: value}))}
                               >
                                 <SelectTrigger>
-                                  <SelectValue placeholder={`${t('products.selectCategory')}...`} />
+                                  <SelectValue placeholder={`Sélectionner ${spec.label.toLowerCase()}`} />
                                 </SelectTrigger>
                                 <SelectContent className="z-[200] bg-popover">
                                   {spec.options.map(opt => (
@@ -1081,7 +1159,7 @@ export const ProductManagement = () => {
                                   checked={dynamicSpecs[spec.nom_champ] || false}
                                   onCheckedChange={(checked) => setDynamicSpecs(prev => ({...prev, [spec.nom_champ]: checked}))}
                                 />
-                                <span className="text-sm text-muted-foreground">{dynamicSpecs[spec.nom_champ] ? t('common.yes') : t('common.no')}</span>
+                                <span className="text-sm text-muted-foreground">{dynamicSpecs[spec.nom_champ] ? 'Oui' : 'Non'}</span>
                               </div>
                             )}
                           </div>
@@ -1090,55 +1168,68 @@ export const ProductManagement = () => {
                     </div>
                   )}
 
-                  {/* Category info badges */}
+                  {/* Info badge based on category */}
                   {formData.category === 'ceramique' && (
                     <div className="col-span-1 sm:col-span-2">
-                      <Badge variant="outline" className="text-xs">🏺 {t('products.ceramic.badge')}</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        🏺 Céramique : Le prix et le stock seront basés sur les m² et les boîtes
+                      </Badge>
                     </div>
                   )}
                   {formData.category === 'fer' && (
                     <div className="col-span-1 sm:col-span-2">
-                      <Badge variant="outline" className="text-xs">🔩 {t('products.iron.badge')}</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        🔩 Fer : Le prix par barre sera calculé automatiquement (prix/m × longueur)
+                      </Badge>
                     </div>
                   )}
                   {formData.category === 'energie' && (
                     <div className="col-span-1 sm:col-span-2">
-                      <Badge variant="outline" className="text-xs">⚡ {t('products.energy.badge')}</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        ⚡ Énergie : Ajoutez les spécifications techniques (puissance, voltage, capacité, etc.)
+                      </Badge>
                     </div>
                   )}
                   {formData.category === 'blocs' && (
                     <div className="col-span-1 sm:col-span-2">
-                      <Badge variant="outline" className="text-xs">🧱 {t('products.blocks.badge')}</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        🧱 Blocs : Précisez le type de bloc et son poids (optionnel)
+                      </Badge>
                     </div>
                   )}
                   {formData.category === 'vetements' && (
                     <div className="col-span-1 sm:col-span-2">
-                      <Badge variant="outline" className="text-xs">👕 {t('products.clothing.badge')}</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        👕 Vêtements : Précisez la taille, le genre et la couleur
+                      </Badge>
                     </div>
                   )}
                   {formData.category === 'electromenager' && (
                     <div className="col-span-1 sm:col-span-2">
-                      <Badge variant="outline" className="text-xs">🔌 {t('products.appliance.badge')}</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        🔌 Électroménager : Ajoutez les spécifications techniques, la marque et la garantie
+                      </Badge>
                     </div>
                   )}
 
                   <div className="space-y-2">
-                    <Label htmlFor="unit">{t('products.unitOfMeasure')} *</Label>
+                    <Label htmlFor="unit">Unité de mesure *</Label>
                     <Input
                       id="unit"
                       required
                       value={formData.unit}
                       onChange={(e) => setFormData({...formData, unit: e.target.value})}
-                      placeholder={t('products.unitPlaceholder')}
+                      placeholder="Ex: m², barre, sac, livre..."
                       disabled={formData.category === 'ceramique' || formData.category === 'fer'}
                       className={formData.category === 'ceramique' || formData.category === 'fer' ? 'bg-muted' : ''}
                     />
                   </div>
 
+                  {/* Show these fields only for non-ceramic and non-iron products */}
                   {formData.category !== 'ceramique' && formData.category !== 'fer' && (
                     <>
                       <div className="space-y-2">
-                        <Label htmlFor="price">{t('products.sellingPrice')} ({formData.currency}) *</Label>
+                        <Label htmlFor="price">Prix de vente ({formData.currency}) *</Label>
                         <Input
                           id="price"
                           type="number"
@@ -1150,7 +1241,7 @@ export const ProductManagement = () => {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="purchase_price">{t('products.purchasePrice')} ({formData.currency})</Label>
+                        <Label htmlFor="purchase_price">Prix d'achat ({formData.currency})</Label>
                         <Input
                           id="purchase_price"
                           type="number"
@@ -1159,16 +1250,16 @@ export const ProductManagement = () => {
                           onChange={(e) => setFormData({...formData, purchase_price: e.target.value})}
                           placeholder={formData.currency === 'USD' ? '$0.00' : '0.00 HTG'}
                         />
-                        <p className="text-xs text-muted-foreground">{t('products.purchasePriceHint')}</p>
+                        <p className="text-xs text-muted-foreground">Coût payé par le magasin (optionnel)</p>
                         {formData.purchase_price && formData.price && (
                           <p className="text-xs font-medium text-success">
-                            {t('products.profit')}: {formData.currency === 'USD' ? '$' : ''}{(parseFloat(formData.price) - parseFloat(formData.purchase_price)).toFixed(2)}{formData.currency === 'HTG' ? ' HTG' : ''}
+                            Bénéfice: {formData.currency === 'USD' ? '$' : ''}{(parseFloat(formData.price) - parseFloat(formData.purchase_price)).toFixed(2)}{formData.currency === 'HTG' ? ' HTG' : ''}
                             ({(((parseFloat(formData.price) - parseFloat(formData.purchase_price)) / parseFloat(formData.price)) * 100).toFixed(1)}%)
                           </p>
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="quantity">{t('common.quantity')} *</Label>
+                        <Label htmlFor="quantity">Quantité *</Label>
                         <Input
                           id="quantity"
                           type="number"
@@ -1183,7 +1274,7 @@ export const ProductManagement = () => {
                   )}
 
                   <div className="space-y-2">
-                    <Label htmlFor="alert_threshold">{t('products.alertThreshold')} *</Label>
+                    <Label htmlFor="alert_threshold">Seuil d'alerte *</Label>
                     <Input
                       id="alert_threshold"
                       type="number"
@@ -1194,7 +1285,7 @@ export const ProductManagement = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="is_active">{t('common.status')}</Label>
+                    <Label htmlFor="is_active">Statut</Label>
                     <Select
                       value={formData.is_active ? 'true' : 'false'}
                       onValueChange={(value) => setFormData({...formData, is_active: value === 'true'})}
@@ -1203,13 +1294,13 @@ export const ProductManagement = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="pointer-events-auto z-[150]">
-                        <SelectItem value="true">{t('common.active')}</SelectItem>
-                        <SelectItem value="false">{t('common.inactive')}</SelectItem>
+                        <SelectItem value="true">Actif</SelectItem>
+                        <SelectItem value="false">Inactif</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="sale_type">{t('products.saleType')} *</Label>
+                    <Label htmlFor="sale_type">Type de vente *</Label>
                     <Select
                       value={formData.sale_type}
                       onValueChange={(value: 'retail' | 'wholesale') => setFormData({...formData, sale_type: value})}
@@ -1218,13 +1309,13 @@ export const ProductManagement = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="pointer-events-auto z-[150]">
-                        <SelectItem value="retail">{t('products.retail')}</SelectItem>
-                        <SelectItem value="wholesale">{t('products.wholesale')}</SelectItem>
+                        <SelectItem value="retail">Détail</SelectItem>
+                        <SelectItem value="wholesale">Gros</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="currency">{t('common.currency')} *</Label>
+                    <Label htmlFor="currency">Devise *</Label>
                     <Select
                       value={formData.currency}
                       onValueChange={(value: 'USD' | 'HTG') => setFormData({...formData, currency: value})}
@@ -1244,64 +1335,175 @@ export const ProductManagement = () => {
                 {formData.category === 'ceramique' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/50">
                     <div className="col-span-1 sm:col-span-2">
-                      <h3 className="font-semibold text-sm mb-2">🏺 {t('products.ceramic.title')}</h3>
+                      <h3 className="font-semibold text-sm mb-2">🏺 Configuration Céramique</h3>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="dimension">{t('products.ceramic.dimension')} *</Label>
-                      <Input id="dimension" required value={formData.dimension} onChange={(e) => setFormData({...formData, dimension: e.target.value})} placeholder={t('products.ceramic.dimensionPlaceholder')} />
+                      <Label htmlFor="dimension">Dimension *</Label>
+                      <Input
+                        id="dimension"
+                        required
+                        value={formData.dimension}
+                        onChange={(e) => setFormData({...formData, dimension: e.target.value})}
+                        placeholder="Ex: 60x60, 40x40"
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="surface_par_boite">{t('products.ceramic.surfacePerBox')} *</Label>
-                      <Input id="surface_par_boite" type="number" step="0.01" required value={formData.surface_par_boite} onChange={(e) => setFormData({...formData, surface_par_boite: e.target.value})} placeholder="1.44" />
+                      <Label htmlFor="surface_par_boite">Surface par boîte (m²) *</Label>
+                      <Input
+                        id="surface_par_boite"
+                        type="number"
+                        step="0.01"
+                        required
+                        value={formData.surface_par_boite}
+                        onChange={(e) => setFormData({...formData, surface_par_boite: e.target.value})}
+                        placeholder="1.44"
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="prix_m2">{t('products.ceramic.sellingPriceM2')} ({formData.currency}) *</Label>
-                      <Input id="prix_m2" type="number" step="0.01" required value={formData.prix_m2} onChange={(e) => setFormData({...formData, prix_m2: e.target.value})} placeholder="0.00" />
+                      <Label htmlFor="prix_m2">Prix de vente par m² ({formData.currency}) *</Label>
+                      <Input
+                        id="prix_m2"
+                        type="number"
+                        step="0.01"
+                        required
+                        value={formData.prix_m2}
+                        onChange={(e) => setFormData({...formData, prix_m2: e.target.value})}
+                        placeholder={formData.currency === 'USD' ? '$0.00' : '0.00 HTG'}
+                      />
+                      <p className="text-xs text-muted-foreground">Prix de revente au client</p>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="prix_achat_m2">{t('products.ceramic.purchasePriceM2')} ({formData.currency}) *</Label>
-                      <Input id="prix_achat_m2" type="number" step="0.01" required value={formData.prix_achat_m2} onChange={(e) => setFormData({...formData, prix_achat_m2: e.target.value})} placeholder="0.00" />
+                      <Label htmlFor="prix_achat_m2">Prix d'achat par m² ({formData.currency}) *</Label>
+                      <Input
+                        id="prix_achat_m2"
+                        type="number"
+                        step="0.01"
+                        required
+                        value={formData.prix_achat_m2}
+                        onChange={(e) => {
+                          const prixAchat = e.target.value;
+                          setFormData({...formData, prix_achat_m2: prixAchat});
+                        }}
+                        placeholder={formData.currency === 'USD' ? '$0.00' : '0.00 HTG'}
+                      />
+                      <p className="text-xs text-muted-foreground">Coût unitaire payé par le magasin</p>
+                      {formData.prix_achat_m2 && formData.prix_m2 && (
+                        <p className="text-xs font-medium text-success">
+                          Bénéfice: {formData.currency === 'USD' ? '$' : ''}{(parseFloat(formData.prix_m2) - parseFloat(formData.prix_achat_m2)).toFixed(2)}{formData.currency === 'HTG' ? ' HTG' : ''}/m²
+                          ({(((parseFloat(formData.prix_m2) - parseFloat(formData.prix_achat_m2)) / parseFloat(formData.prix_m2)) * 100).toFixed(1)}%)
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="stock_boite">{t('products.ceramic.stockBoxes')} *</Label>
-                      <Input id="stock_boite" type="number" step="1" required value={formData.stock_boite} onChange={(e) => setFormData({...formData, stock_boite: e.target.value})} placeholder="0" />
+                      <Label htmlFor="stock_boite">Stock (boîtes) *</Label>
+                      <Input
+                        id="stock_boite"
+                        type="number"
+                        step="0.01"
+                        required
+                        value={formData.stock_boite}
+                        onChange={(e) => setFormData({...formData, stock_boite: e.target.value})}
+                        placeholder="24"
+                      />
+                      <p className="text-xs text-muted-foreground">Accepte les décimales</p>
                     </div>
                   </div>
                 )}
 
-                {/* Iron-specific fields */}
+                {/* Iron bar-specific fields */}
                 {formData.category === 'fer' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/50">
                     <div className="col-span-1 sm:col-span-2">
-                      <h3 className="font-semibold text-sm mb-2">🔩 {t('products.iron.title')}</h3>
+                      <h3 className="font-semibold text-sm mb-2">🔩 Configuration Fer / Acier</h3>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="diametre">{t('products.iron.diameter')} *</Label>
-                      <Input id="diametre" required value={formData.diametre} onChange={(e) => setFormData({...formData, diametre: e.target.value})} placeholder={t('products.iron.diameterPlaceholder')} />
+                      <Label htmlFor="diametre">Diamètre *</Label>
+                      <Select
+                        value={formData.diametre}
+                        onValueChange={(value) => {
+                          // Auto-set bars_per_ton based on diameter
+                          let barsPerTon = '';
+                          if (value === '1/2"') barsPerTon = '110';
+                          else if (value === '3/8"') barsPerTon = '195';
+                          else if (value === '1/4"') barsPerTon = '660';
+                          setFormData({...formData, diametre: value, bars_per_ton: barsPerTon});
+                        }}
+                      >
+                        <SelectTrigger className="pointer-events-auto">
+                          <SelectValue placeholder="Sélectionner le diamètre" />
+                        </SelectTrigger>
+                        <SelectContent className="pointer-events-auto z-[150]">
+                          <SelectItem value='1/2"'>1/2 pouce (110 barres/tonne)</SelectItem>
+                          <SelectItem value='3/8"'>3/8 pouce (195 barres/tonne)</SelectItem>
+                          <SelectItem value='1/4"'>1/4 pouce (660 barres/tonne)</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="longueur_barre_ft">{t('products.iron.barLengthFt')} *</Label>
-                      <Input id="longueur_barre_ft" type="number" step="0.1" required value={formData.longueur_barre_ft} onChange={(e) => setFormData({...formData, longueur_barre_ft: e.target.value})} placeholder="20" />
+                      <Label htmlFor="bars_per_ton">Barres par tonne 🔢</Label>
+                      <Input
+                        id="bars_per_ton"
+                        type="number"
+                        value={formData.bars_per_ton}
+                        readOnly
+                        className="bg-muted cursor-not-allowed"
+                        placeholder="Calculé automatiquement"
+                      />
+                      <p className="text-xs text-muted-foreground">Calculé selon le diamètre</p>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="bars_per_ton">{t('products.iron.barsPerTon')} *</Label>
-                      <Input id="bars_per_ton" type="number" step="1" required value={formData.bars_per_ton} onChange={(e) => setFormData({...formData, bars_per_ton: e.target.value})} placeholder="0" />
+                      <Label htmlFor="longueur_barre_ft">Longueur barre (pieds) *</Label>
+                      <Select
+                        value={formData.longueur_barre_ft}
+                        onValueChange={(value) => setFormData({...formData, longueur_barre_ft: value})}
+                      >
+                        <SelectTrigger className="pointer-events-auto">
+                          <SelectValue placeholder="Sélectionner la longueur" />
+                        </SelectTrigger>
+                        <SelectContent className="pointer-events-auto z-[150]">
+                          <SelectItem value="27">27 ft</SelectItem>
+                          <SelectItem value="30">30 ft</SelectItem>
+                          <SelectItem value="32">32 ft</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="prix_par_metre">{t('products.iron.pricePerMeter')} ({formData.currency})</Label>
-                      <Input id="prix_par_metre" type="number" step="0.01" value={formData.prix_par_metre} onChange={(e) => setFormData({...formData, prix_par_metre: e.target.value})} placeholder="0.00" />
+                      <Label htmlFor="prix_par_barre">Prix par barre ({formData.currency}) *</Label>
+                      <Input
+                        id="prix_par_barre"
+                        type="number"
+                        step="0.01"
+                        required
+                        value={formData.prix_par_barre}
+                        onChange={(e) => setFormData({...formData, prix_par_barre: e.target.value})}
+                        placeholder={formData.currency === 'USD' ? '$0.00' : '0.00 HTG'}
+                      />
+                      <p className="text-xs text-muted-foreground">Prix unitaire d'une barre</p>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="prix_par_barre">{t('products.iron.pricePerBar')} ({formData.currency}) *</Label>
-                      <Input id="prix_par_barre" type="number" step="0.01" required value={formData.prix_par_barre} onChange={(e) => setFormData({...formData, prix_par_barre: e.target.value})} placeholder="0.00" />
+                      <Label htmlFor="stock_barre">Stock (barres) *</Label>
+                      <Input
+                        id="stock_barre"
+                        type="number"
+                        step="0.01"
+                        required
+                        value={formData.stock_barre}
+                        onChange={(e) => setFormData({...formData, stock_barre: e.target.value})}
+                        placeholder="50"
+                      />
+                      <p className="text-xs text-muted-foreground">Accepte les décimales pour les fractions de tonne</p>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="stock_barre">{t('products.iron.stockBars')} *</Label>
-                      <Input id="stock_barre" type="number" step="1" required value={formData.stock_barre} onChange={(e) => setFormData({...formData, stock_barre: e.target.value})} placeholder="0" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="purchase_price_fer">{t('products.purchasePrice')} ({formData.currency})</Label>
-                      <Input id="purchase_price_fer" type="number" step="0.01" value={formData.purchase_price} onChange={(e) => setFormData({...formData, purchase_price: e.target.value})} placeholder="0.00" />
+                      <Label htmlFor="purchase_price">Prix d'achat par barre ({formData.currency})</Label>
+                      <Input
+                        id="purchase_price"
+                        type="number"
+                        step="0.01"
+                        value={formData.purchase_price}
+                        onChange={(e) => setFormData({...formData, purchase_price: e.target.value})}
+                        placeholder={formData.currency === 'USD' ? '$0.00' : '0.00 HTG'}
+                      />
+                      <p className="text-xs text-muted-foreground">Coût unitaire payé par le magasin</p>
                     </div>
                   </div>
                 )}
@@ -1310,35 +1512,64 @@ export const ProductManagement = () => {
                 {formData.category === 'energie' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/50">
                     <div className="col-span-1 sm:col-span-2">
-                      <h3 className="font-semibold text-sm mb-2">⚡ {t('products.energy.title')}</h3>
+                      <h3 className="font-semibold text-sm mb-2">⚡ Configuration Énergie / Solaire</h3>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="type_energie">{t('products.energy.type')}</Label>
-                      <Select value={formData.type_energie} onValueChange={(value) => setFormData({...formData, type_energie: value})}>
+                      <Label htmlFor="type_energie">Type d'énergie</Label>
+                      <Select
+                        value={formData.type_energie}
+                        onValueChange={(value) => setFormData({...formData, type_energie: value})}
+                      >
                         <SelectTrigger className="pointer-events-auto">
-                          <SelectValue placeholder={t('products.blocks.selectType')} />
+                          <SelectValue placeholder="Sélectionner le type" />
                         </SelectTrigger>
                         <SelectContent className="pointer-events-auto z-[150]">
-                          {['solaire', 'batterie', 'generateur', 'gaz', 'essence', 'diesel', 'petrole', 'charbon'].map(type => (
-                            <SelectItem key={type} value={type}>{t(`products.energy.types.${type}`)}</SelectItem>
-                          ))}
+                          <SelectItem value="solaire">Solaire</SelectItem>
+                          <SelectItem value="batterie">Batterie</SelectItem>
+                          <SelectItem value="generateur">Générateur</SelectItem>
+                          <SelectItem value="gaz">Gaz</SelectItem>
+                          <SelectItem value="essence">Essence</SelectItem>
+                          <SelectItem value="diesel">Diesel</SelectItem>
+                          <SelectItem value="petrole">Pétrole lampant</SelectItem>
+                          <SelectItem value="charbon">Charbon de bois</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="puissance">{t('products.energy.power')}</Label>
-                      <Input id="puissance" type="number" step="0.01" value={formData.puissance} onChange={(e) => setFormData({...formData, puissance: e.target.value})} placeholder="Ex: 300" />
-                      <p className="text-xs text-muted-foreground">{t('products.energy.powerHint')}</p>
+                      <Label htmlFor="puissance">Puissance (W ou kW)</Label>
+                      <Input
+                        id="puissance"
+                        type="number"
+                        step="0.01"
+                        value={formData.puissance}
+                        onChange={(e) => setFormData({...formData, puissance: e.target.value})}
+                        placeholder="Ex: 300 (pour panneaux solaires)"
+                      />
+                      <p className="text-xs text-muted-foreground">Pour panneaux solaires, générateurs</p>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="voltage">{t('products.energy.voltage')}</Label>
-                      <Input id="voltage" type="number" step="0.1" value={formData.voltage} onChange={(e) => setFormData({...formData, voltage: e.target.value})} placeholder="Ex: 12, 24, 220" />
-                      <p className="text-xs text-muted-foreground">{t('products.energy.voltageHint')}</p>
+                      <Label htmlFor="voltage">Voltage (V)</Label>
+                      <Input
+                        id="voltage"
+                        type="number"
+                        step="0.1"
+                        value={formData.voltage}
+                        onChange={(e) => setFormData({...formData, voltage: e.target.value})}
+                        placeholder="Ex: 12, 24, 220"
+                      />
+                      <p className="text-xs text-muted-foreground">Pour batteries, équipements électriques</p>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="capacite">{t('products.energy.capacity')}</Label>
-                      <Input id="capacite" type="number" step="0.01" value={formData.capacite} onChange={(e) => setFormData({...formData, capacite: e.target.value})} placeholder="Ex: 100" />
-                      <p className="text-xs text-muted-foreground">{t('products.energy.capacityHint')}</p>
+                      <Label htmlFor="capacite">Capacité</Label>
+                      <Input
+                        id="capacite"
+                        type="number"
+                        step="0.01"
+                        value={formData.capacite}
+                        onChange={(e) => setFormData({...formData, capacite: e.target.value})}
+                        placeholder="Ex: 100 (Ah pour batteries, kg pour gaz)"
+                      />
+                      <p className="text-xs text-muted-foreground">Ah pour batteries, kg pour bonbonnes, litres pour carburants</p>
                     </div>
                   </div>
                 )}
@@ -1347,13 +1578,16 @@ export const ProductManagement = () => {
                 {formData.category === 'blocs' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/50">
                     <div className="col-span-1 sm:col-span-2">
-                      <h3 className="font-semibold text-sm mb-2">🧱 {t('products.blocks.title')}</h3>
+                      <h3 className="font-semibold text-sm mb-2">🧱 Configuration Blocs</h3>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="bloc_type">{t('products.blocks.type')} *</Label>
-                      <Select value={formData.bloc_type} onValueChange={(value) => setFormData({...formData, bloc_type: value})}>
+                      <Label htmlFor="bloc_type">Type de bloc *</Label>
+                      <Select
+                        value={formData.bloc_type}
+                        onValueChange={(value) => setFormData({...formData, bloc_type: value})}
+                      >
                         <SelectTrigger className="pointer-events-auto">
-                          <SelectValue placeholder={t('products.blocks.selectType')} />
+                          <SelectValue placeholder="Sélectionner le type" />
                         </SelectTrigger>
                         <SelectContent className="pointer-events-auto z-[150]">
                           <SelectItem value="4_pouces">Bloc 4"</SelectItem>
@@ -1366,9 +1600,16 @@ export const ProductManagement = () => {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="bloc_poids">{t('products.blocks.weight')}</Label>
-                      <Input id="bloc_poids" type="number" step="0.01" value={formData.bloc_poids} onChange={(e) => setFormData({...formData, bloc_poids: e.target.value})} placeholder="Ex: 12.5" />
-                      <p className="text-xs text-muted-foreground">{t('products.blocks.weightHint')}</p>
+                      <Label htmlFor="bloc_poids">Poids (kg) - Optionnel</Label>
+                      <Input
+                        id="bloc_poids"
+                        type="number"
+                        step="0.01"
+                        value={formData.bloc_poids}
+                        onChange={(e) => setFormData({...formData, bloc_poids: e.target.value})}
+                        placeholder="Ex: 12.5"
+                      />
+                      <p className="text-xs text-muted-foreground">Poids approximatif par bloc</p>
                     </div>
                   </div>
                 )}
@@ -1377,29 +1618,51 @@ export const ProductManagement = () => {
                 {formData.category === 'vetements' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/50">
                     <div className="col-span-1 sm:col-span-2">
-                      <h3 className="font-semibold text-sm mb-2">👕 {t('products.clothing.title')}</h3>
+                      <h3 className="font-semibold text-sm mb-2">👕 Configuration Vêtements</h3>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="vetement_taille">{t('products.clothing.size')} *</Label>
-                      <Select value={formData.vetement_taille} onValueChange={(value) => setFormData({...formData, vetement_taille: value})}>
-                        <SelectTrigger className="pointer-events-auto"><SelectValue placeholder={t('products.clothing.size')} /></SelectTrigger>
+                      <Label htmlFor="vetement_taille">Taille *</Label>
+                      <Select
+                        value={formData.vetement_taille}
+                        onValueChange={(value) => setFormData({...formData, vetement_taille: value})}
+                      >
+                        <SelectTrigger className="pointer-events-auto">
+                          <SelectValue placeholder="Sélectionner la taille" />
+                        </SelectTrigger>
                         <SelectContent className="pointer-events-auto z-[150]">
-                          {['S', 'M', 'L', 'XL', 'XXL'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                          <SelectItem value="S">S</SelectItem>
+                          <SelectItem value="M">M</SelectItem>
+                          <SelectItem value="L">L</SelectItem>
+                          <SelectItem value="XL">XL</SelectItem>
+                          <SelectItem value="XXL">XXL</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="vetement_genre">{t('products.clothing.gender')} *</Label>
-                      <Select value={formData.vetement_genre} onValueChange={(value) => setFormData({...formData, vetement_genre: value})}>
-                        <SelectTrigger className="pointer-events-auto"><SelectValue placeholder={t('products.clothing.gender')} /></SelectTrigger>
+                      <Label htmlFor="vetement_genre">Genre *</Label>
+                      <Select
+                        value={formData.vetement_genre}
+                        onValueChange={(value) => setFormData({...formData, vetement_genre: value})}
+                      >
+                        <SelectTrigger className="pointer-events-auto">
+                          <SelectValue placeholder="Sélectionner le genre" />
+                        </SelectTrigger>
                         <SelectContent className="pointer-events-auto z-[150]">
-                          {['homme', 'femme', 'enfant'].map(g => <SelectItem key={g} value={g}>{t(`products.clothing.genders.${g}`)}</SelectItem>)}
+                          <SelectItem value="homme">Homme</SelectItem>
+                          <SelectItem value="femme">Femme</SelectItem>
+                          <SelectItem value="enfant">Enfant</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2 col-span-1 sm:col-span-2">
-                      <Label htmlFor="vetement_couleur">{t('products.clothing.color')} *</Label>
-                      <Input id="vetement_couleur" type="text" value={formData.vetement_couleur} onChange={(e) => setFormData({...formData, vetement_couleur: e.target.value})} placeholder={t('products.clothing.colorPlaceholder')} />
+                      <Label htmlFor="vetement_couleur">Couleur *</Label>
+                      <Input
+                        id="vetement_couleur"
+                        type="text"
+                        value={formData.vetement_couleur}
+                        onChange={(e) => setFormData({...formData, vetement_couleur: e.target.value})}
+                        placeholder="Ex: Rouge, Bleu, Noir"
+                      />
                     </div>
                   </div>
                 )}
@@ -1408,80 +1671,163 @@ export const ProductManagement = () => {
                 {formData.category === 'electromenager' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/50">
                     <div className="col-span-1 sm:col-span-2">
-                      <h3 className="font-semibold text-sm mb-2">🔌 {t('products.appliance.title')}</h3>
+                      <h3 className="font-semibold text-sm mb-2">🔌 Configuration Électroménager</h3>
                     </div>
                     <div className="space-y-2">
-                      <Label>{t('products.appliance.subcategory')} *</Label>
-                      <Select value={formData.electromenager_sous_categorie} onValueChange={(value) => setFormData({...formData, electromenager_sous_categorie: value})}>
-                        <SelectTrigger className="pointer-events-auto"><SelectValue placeholder={t('products.appliance.subcategory')} /></SelectTrigger>
+                      <Label htmlFor="electromenager_sous_categorie">Sous-catégorie *</Label>
+                      <Select
+                        value={formData.electromenager_sous_categorie}
+                        onValueChange={(value) => setFormData({...formData, electromenager_sous_categorie: value})}
+                      >
+                        <SelectTrigger className="pointer-events-auto">
+                          <SelectValue placeholder="Sélectionner la sous-catégorie" />
+                        </SelectTrigger>
                         <SelectContent className="pointer-events-auto z-[150]">
-                          {['gros_electromenager', 'petit_electromenager', 'cuisine', 'blanchisserie', 'climatisation_ventilation', 'entretien'].map(sc => (
-                            <SelectItem key={sc} value={sc}>{t(`products.appliance.subcategories.${sc}`)}</SelectItem>
-                          ))}
+                          <SelectItem value="gros_electromenager">Gros électroménager</SelectItem>
+                          <SelectItem value="petit_electromenager">Petit électroménager</SelectItem>
+                          <SelectItem value="cuisine">Cuisine</SelectItem>
+                          <SelectItem value="blanchisserie">Blanchisserie</SelectItem>
+                          <SelectItem value="climatisation_ventilation">Climatisation / Ventilation</SelectItem>
+                          <SelectItem value="entretien">Entretien</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>{t('products.appliance.brand')}</Label>
-                      <Input value={formData.electromenager_marque} onChange={(e) => setFormData({...formData, electromenager_marque: e.target.value})} placeholder="Ex: Samsung, LG, Haier" />
+                      <Label htmlFor="electromenager_marque">Marque</Label>
+                      <Input
+                        id="electromenager_marque"
+                        type="text"
+                        value={formData.electromenager_marque}
+                        onChange={(e) => setFormData({...formData, electromenager_marque: e.target.value})}
+                        placeholder="Ex: Samsung, LG, Haier"
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label>{t('products.appliance.model')}</Label>
-                      <Input value={formData.electromenager_modele} onChange={(e) => setFormData({...formData, electromenager_modele: e.target.value})} placeholder="Ex: WW90T554DAW" />
+                      <Label htmlFor="electromenager_modele">Modèle / Référence</Label>
+                      <Input
+                        id="electromenager_modele"
+                        type="text"
+                        value={formData.electromenager_modele}
+                        onChange={(e) => setFormData({...formData, electromenager_modele: e.target.value})}
+                        placeholder="Ex: WW90T554DAW"
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label>{t('products.appliance.color')}</Label>
-                      <Input value={formData.electromenager_couleur} onChange={(e) => setFormData({...formData, electromenager_couleur: e.target.value})} placeholder="Ex: Blanc, Inox, Noir" />
+                      <Label htmlFor="electromenager_couleur">Couleur</Label>
+                      <Input
+                        id="electromenager_couleur"
+                        type="text"
+                        value={formData.electromenager_couleur}
+                        onChange={(e) => setFormData({...formData, electromenager_couleur: e.target.value})}
+                        placeholder="Ex: Blanc, Inox, Noir"
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label>{t('products.appliance.power')}</Label>
-                      <Input type="number" step="1" value={formData.puissance} onChange={(e) => setFormData({...formData, puissance: e.target.value})} placeholder="Ex: 2100" />
+                      <Label htmlFor="puissance">Puissance (W)</Label>
+                      <Input
+                        id="puissance"
+                        type="number"
+                        step="1"
+                        value={formData.puissance}
+                        onChange={(e) => setFormData({...formData, puissance: e.target.value})}
+                        placeholder="Ex: 2100"
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label>{t('products.appliance.voltage')}</Label>
-                      <Input type="number" step="1" value={formData.voltage} onChange={(e) => setFormData({...formData, voltage: e.target.value})} placeholder="Ex: 110, 220" />
+                      <Label htmlFor="voltage">Voltage (V)</Label>
+                      <Input
+                        id="voltage"
+                        type="number"
+                        step="1"
+                        value={formData.voltage}
+                        onChange={(e) => setFormData({...formData, voltage: e.target.value})}
+                        placeholder="Ex: 110, 220"
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label>{t('products.appliance.capacity')}</Label>
-                      <Input type="number" step="0.1" value={formData.capacite} onChange={(e) => setFormData({...formData, capacite: e.target.value})} placeholder="Ex: 9 (kg) ou 300 (litres)" />
-                      <p className="text-xs text-muted-foreground">{t('products.appliance.capacityHint')}</p>
+                      <Label htmlFor="capacite">Capacité (kg/litres)</Label>
+                      <Input
+                        id="capacite"
+                        type="number"
+                        step="0.1"
+                        value={formData.capacite}
+                        onChange={(e) => setFormData({...formData, capacite: e.target.value})}
+                        placeholder="Ex: 9 (kg) ou 300 (litres)"
+                      />
+                      <p className="text-xs text-muted-foreground">kg pour lave-linge, litres pour frigo</p>
                     </div>
                     <div className="space-y-2">
-                      <Label>{t('products.appliance.noiseLevel')}</Label>
-                      <Input type="number" step="1" value={formData.electromenager_niveau_sonore_db} onChange={(e) => setFormData({...formData, electromenager_niveau_sonore_db: e.target.value})} placeholder="Ex: 54" />
+                      <Label htmlFor="electromenager_niveau_sonore_db">Niveau sonore (dB)</Label>
+                      <Input
+                        id="electromenager_niveau_sonore_db"
+                        type="number"
+                        step="1"
+                        value={formData.electromenager_niveau_sonore_db}
+                        onChange={(e) => setFormData({...formData, electromenager_niveau_sonore_db: e.target.value})}
+                        placeholder="Ex: 54"
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label>{t('products.appliance.energyClass')}</Label>
-                      <Select value={formData.electromenager_classe_energie} onValueChange={(value) => setFormData({...formData, electromenager_classe_energie: value})}>
-                        <SelectTrigger className="pointer-events-auto"><SelectValue placeholder={t('products.appliance.energyClass')} /></SelectTrigger>
+                      <Label htmlFor="electromenager_classe_energie">Classe énergétique</Label>
+                      <Select
+                        value={formData.electromenager_classe_energie}
+                        onValueChange={(value) => setFormData({...formData, electromenager_classe_energie: value})}
+                      >
+                        <SelectTrigger className="pointer-events-auto">
+                          <SelectValue placeholder="Sélectionner la classe" />
+                        </SelectTrigger>
                         <SelectContent className="pointer-events-auto z-[150]">
-                          {['A+++', 'A++', 'A+', 'A', 'B', 'C', 'D'].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                          <SelectItem value="A+++">A+++</SelectItem>
+                          <SelectItem value="A++">A++</SelectItem>
+                          <SelectItem value="A+">A+</SelectItem>
+                          <SelectItem value="A">A</SelectItem>
+                          <SelectItem value="B">B</SelectItem>
+                          <SelectItem value="C">C</SelectItem>
+                          <SelectItem value="D">D</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>{t('products.appliance.warranty')}</Label>
-                      <Input type="number" step="1" value={formData.electromenager_garantie_mois} onChange={(e) => setFormData({...formData, electromenager_garantie_mois: e.target.value})} placeholder="Ex: 12, 24" />
+                      <Label htmlFor="electromenager_garantie_mois">Garantie (mois)</Label>
+                      <Input
+                        id="electromenager_garantie_mois"
+                        type="number"
+                        step="1"
+                        value={formData.electromenager_garantie_mois}
+                        onChange={(e) => setFormData({...formData, electromenager_garantie_mois: e.target.value})}
+                        placeholder="Ex: 12, 24"
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label>{t('products.appliance.material')}</Label>
-                      <Select value={formData.electromenager_materiau} onValueChange={(value) => setFormData({...formData, electromenager_materiau: value})}>
-                        <SelectTrigger className="pointer-events-auto"><SelectValue placeholder={t('products.appliance.material')} /></SelectTrigger>
+                      <Label htmlFor="electromenager_materiau">Matériau principal</Label>
+                      <Select
+                        value={formData.electromenager_materiau}
+                        onValueChange={(value) => setFormData({...formData, electromenager_materiau: value})}
+                      >
+                        <SelectTrigger className="pointer-events-auto">
+                          <SelectValue placeholder="Sélectionner le matériau" />
+                        </SelectTrigger>
                         <SelectContent className="pointer-events-auto z-[150]">
-                          {['inox', 'plastique', 'aluminium', 'verre', 'mixte'].map(m => (
-                            <SelectItem key={m} value={m}>{t(`products.appliance.materials.${m}`)}</SelectItem>
-                          ))}
+                          <SelectItem value="inox">Inox</SelectItem>
+                          <SelectItem value="plastique">Plastique</SelectItem>
+                          <SelectItem value="aluminium">Aluminium</SelectItem>
+                          <SelectItem value="verre">Verre</SelectItem>
+                          <SelectItem value="mixte">Mixte</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>{t('products.appliance.installation')}</Label>
-                      <Select value={formData.electromenager_installation} onValueChange={(value) => setFormData({...formData, electromenager_installation: value})}>
-                        <SelectTrigger className="pointer-events-auto"><SelectValue placeholder={t('products.appliance.installation')} /></SelectTrigger>
+                      <Label htmlFor="electromenager_installation">Type d'installation</Label>
+                      <Select
+                        value={formData.electromenager_installation}
+                        onValueChange={(value) => setFormData({...formData, electromenager_installation: value})}
+                      >
+                        <SelectTrigger className="pointer-events-auto">
+                          <SelectValue placeholder="Sélectionner le type" />
+                        </SelectTrigger>
                         <SelectContent className="pointer-events-auto z-[150]">
-                          {['pose_libre', 'encastrable'].map(i => (
-                            <SelectItem key={i} value={i}>{t(`products.appliance.installTypes.${i}`)}</SelectItem>
-                          ))}
+                          <SelectItem value="pose_libre">Pose libre</SelectItem>
+                          <SelectItem value="encastrable">Encastrable</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1489,73 +1835,99 @@ export const ProductManagement = () => {
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="description">{t('common.description')}</Label>
+                  <Label htmlFor="description">Description</Label>
                   <textarea
                     id="description"
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    placeholder={t('common.description')}
+                    placeholder="Description du produit (optionnel)"
                     className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
                 <div className="flex justify-end gap-3 pt-4 border-t">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    {t('common.cancel')}
+                    Annuler
                   </Button>
                   <Button type="submit" className="min-w-[120px]">
-                    {editingProduct ? t('common.edit') : t('products.addProduct')}
+                    {editingProduct ? 'Mettre à jour' : 'Créer le produit'}
                   </Button>
                 </div>
               </form>
             </DialogContent>
           </Dialog>
         </div>
-        {/* Filters Section */}
+        {/* Filters Section - Compact and organized */}
         <div className="mt-3 sm:mt-4 space-y-2 sm:space-y-3">
+          {/* Row 1: Search + Export + View Toggle */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
               <Input
-                placeholder={t('products.searchProducts')}
+                placeholder="Rechercher..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-8 sm:pl-9 h-8 sm:h-10 text-xs sm:text-sm"
               />
             </div>
             <Badge variant="secondary" className="hidden lg:flex text-xs whitespace-nowrap">
-              {filteredProducts.length} {t('products.titleShort').toLowerCase()}
+              {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''}
             </Badge>
+            {/* Export buttons */}
             <div className="flex items-center gap-1">
-              <Button size="sm" variant="outline" onClick={exportToExcel} className="h-7 sm:h-8 px-2 text-[10px] sm:text-xs" title="Excel">
-                {isFreePlan ? <Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={exportToExcel}
+                className="h-7 sm:h-8 px-2 text-[10px] sm:text-xs"
+                title="Exporter en Excel"
+              >
+                <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 <span className="hidden sm:inline ml-1">Excel</span>
               </Button>
-              <Button size="sm" variant="outline" onClick={exportToPDF} className="h-7 sm:h-8 px-2 text-[10px] sm:text-xs" title="PDF">
-                {isFreePlan ? <Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <FileText className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={exportToPDF}
+                className="h-7 sm:h-8 px-2 text-[10px] sm:text-xs"
+                title="Exporter en PDF"
+              >
+                <FileText className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 <span className="hidden sm:inline ml-1">PDF</span>
               </Button>
             </div>
+            {/* View mode toggle */}
             <div className="hidden sm:flex items-center gap-1 border rounded-md p-0.5 bg-muted/50">
-              <Button size="sm" variant={viewMode === 'table' ? 'default' : 'ghost'} onClick={() => setViewMode('table')} className="h-7 w-7 p-0">
+              <Button
+                size="sm"
+                variant={viewMode === 'table' ? 'default' : 'ghost'}
+                onClick={() => setViewMode('table')}
+                className="h-7 w-7 p-0"
+              >
                 <List className="w-3.5 h-3.5" />
               </Button>
-              <Button size="sm" variant={viewMode === 'cards' ? 'default' : 'ghost'} onClick={() => setViewMode('cards')} className="h-7 w-7 p-0">
+              <Button
+                size="sm"
+                variant={viewMode === 'cards' ? 'default' : 'ghost'}
+                onClick={() => setViewMode('cards')}
+                className="h-7 w-7 p-0"
+              >
                 <LayoutGrid className="w-3.5 h-3.5" />
               </Button>
             </div>
           </div>
           
+          {/* Row 2: All filters */}
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             <div className="flex items-center gap-1 text-muted-foreground">
               <Filter className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-              <span className="text-[9px] sm:text-[10px] font-medium">{t('common.filter')}:</span>
+              <span className="text-[9px] sm:text-[10px] font-medium">Filtres:</span>
             </div>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="h-6 sm:h-7 w-[90px] sm:w-[130px] text-[9px] sm:text-[10px]">
-                <SelectValue placeholder={t('common.category')} />
+                <SelectValue placeholder="Catégorie" />
               </SelectTrigger>
               <SelectContent className="z-50 bg-popover">
-                <SelectItem value="all" className="text-xs">{t('common.all')}</SelectItem>
+                <SelectItem value="all" className="text-xs">Toutes catégories</SelectItem>
                 {dynamicCategories.map(cat => (
                   <SelectItem key={cat.id} value={cat.id} className="text-xs">{cat.nom}</SelectItem>
                 ))}
@@ -1563,10 +1935,10 @@ export const ProductManagement = () => {
             </Select>
             <Select value={sousCategoryFilter} onValueChange={setSousCategoryFilter}>
               <SelectTrigger className="h-6 sm:h-7 w-[90px] sm:w-[130px] text-[9px] sm:text-[10px]">
-                <SelectValue placeholder={t('products.subcategory')} />
+                <SelectValue placeholder="Sous-cat." />
               </SelectTrigger>
               <SelectContent className="z-50 bg-popover">
-                <SelectItem value="all" className="text-xs">{t('common.all')}</SelectItem>
+                <SelectItem value="all" className="text-xs">Toutes sous-cat.</SelectItem>
                 {filterSousCategories.map(sc => (
                   <SelectItem key={sc.id} value={sc.id} className="text-xs">{sc.nom}</SelectItem>
                 ))}
@@ -1574,36 +1946,55 @@ export const ProductManagement = () => {
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-6 sm:h-7 w-[75px] sm:w-[100px] text-[9px] sm:text-[10px]">
-                <SelectValue placeholder={t('common.status')} />
+                <SelectValue placeholder="Statut" />
               </SelectTrigger>
               <SelectContent className="z-50 bg-popover">
-                <SelectItem value="all" className="text-xs">{t('common.all')}</SelectItem>
+                <SelectItem value="all" className="text-xs">Tous statuts</SelectItem>
                 <SelectItem value="active" className="text-xs">
-                  <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-success" />{t('common.active')}</span>
+                  <span className="flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3 text-success" />
+                    Actif
+                  </span>
                 </SelectItem>
                 <SelectItem value="inactive" className="text-xs">
-                  <span className="flex items-center gap-1"><XCircle className="w-3 h-3 text-muted-foreground" />{t('common.inactive')}</span>
+                  <span className="flex items-center gap-1">
+                    <XCircle className="w-3 h-3 text-muted-foreground" />
+                    Inactif
+                  </span>
                 </SelectItem>
               </SelectContent>
             </Select>
             <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
               <SelectTrigger className="h-6 sm:h-7 w-[70px] sm:w-[90px] text-[9px] sm:text-[10px]">
-                <SelectValue placeholder={t('common.currency')} />
+                <SelectValue placeholder="Devise" />
               </SelectTrigger>
               <SelectContent className="z-50 bg-popover">
-                <SelectItem value="all" className="text-xs">{t('common.all')}</SelectItem>
+                <SelectItem value="all" className="text-xs">Devises</SelectItem>
                 <SelectItem value="USD" className="text-xs">
-                  <span className="flex items-center gap-1"><DollarSign className="w-3 h-3 text-emerald-600" />USD</span>
+                  <span className="flex items-center gap-1">
+                    <DollarSign className="w-3 h-3 text-emerald-600" />
+                    USD
+                  </span>
                 </SelectItem>
                 <SelectItem value="HTG" className="text-xs">
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 text-sky-600 font-bold text-[10px]">G</span>HTG</span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 text-sky-600 font-bold text-[10px]">G</span>
+                    HTG
+                  </span>
                 </SelectItem>
               </SelectContent>
             </Select>
+            {/* Reset filters button */}
             {hasActiveFilters && (
-              <Button size="sm" variant="ghost" onClick={resetFilters} className="h-6 sm:h-7 px-2 text-[9px] sm:text-[10px] text-muted-foreground hover:text-foreground" title={t('common.resetFilters')}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={resetFilters}
+                className="h-6 sm:h-7 px-2 text-[9px] sm:text-[10px] text-muted-foreground hover:text-foreground"
+                title="Réinitialiser les filtres"
+              >
                 <RotateCcw className="w-3 h-3" />
-                <span className="hidden sm:inline ml-1">{t('common.resetFilters')}</span>
+                <span className="hidden sm:inline ml-1">Réinitialiser</span>
               </Button>
             )}
             <Badge variant="outline" className="lg:hidden text-[9px] sm:text-[10px] ml-auto">
@@ -1614,11 +2005,12 @@ export const ProductManagement = () => {
       </CardHeader>
       <CardContent className="p-2 sm:p-6">
         {viewMode === 'cards' ? (
+          /* Card View */
           <ScrollArea className="h-[calc(100vh-350px)] min-h-[400px]">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 pr-2 sm:pr-4">
               {paginatedProducts.length === 0 ? (
                 <div className="col-span-full text-center py-8 text-muted-foreground">
-                  {t('products.noProducts')}
+                  Aucun produit trouvé
                 </div>
               ) : (
                 paginatedProducts.map((product) => {
@@ -1627,6 +2019,7 @@ export const ProductManagement = () => {
                     <Card key={product.id} className="p-3 sm:p-4 hover:shadow-md transition-shadow">
                       <div className="flex justify-between items-start gap-2 mb-2">
                         <h3 className="font-semibold text-sm sm:text-base line-clamp-2">{product.name}</h3>
+
                         <Badge 
                           variant="outline"
                           className={`text-[10px] sm:text-xs shrink-0 ${product.currency === 'USD' 
@@ -1639,20 +2032,26 @@ export const ProductManagement = () => {
                       </div>
                       
                       <div className="space-y-1.5 text-xs sm:text-sm">
+                        {product.barcode && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Code-barres:</span>
+                            <code className="text-[10px] sm:text-xs bg-muted px-1 py-0.5 rounded">{product.barcode}</code>
+                          </div>
+                        )}
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">{t('common.category')}:</span>
+                          <span className="text-muted-foreground">Catégorie:</span>
                           <Badge variant="outline" className="text-[10px] sm:text-xs">
-                            {getCategoryLabel(product.category)}
+                            {getCategoryDisplay(product)}
                           </Badge>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">{t('common.price')}:</span>
+                          <span className="text-muted-foreground">Prix:</span>
                           <span className="font-medium text-success">
                             {product.currency === 'USD' ? '$' : ''}{product.price.toFixed(2)} {product.currency || 'HTG'}
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-muted-foreground">{t('products.tableHeaders.stock')}:</span>
+                          <span className="text-muted-foreground">Stock:</span>
                           <div className="flex items-center gap-1">
                             <span className="font-medium">{stock.value} {stock.unit}</span>
                             {stock.raw <= product.alert_threshold && (
@@ -1661,20 +2060,30 @@ export const ProductManagement = () => {
                           </div>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">{t('common.status')}:</span>
+                          <span className="text-muted-foreground">Statut:</span>
                           <Badge variant={product.is_active ? "default" : "secondary"} className="text-[10px] sm:text-xs">
-                            {product.is_active ? t('common.active') : t('common.inactive')}
+                            {product.is_active ? "Actif" : "Inactif"}
                           </Badge>
                         </div>
                       </div>
                       
                       {isAdmin && (
                         <div className="flex gap-2 mt-3 pt-3 border-t">
-                          <Button size="sm" variant="outline" onClick={() => handleEdit(product)} className="flex-1 h-8 text-xs">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEdit(product)}
+                            className="flex-1 h-8 text-xs"
+                          >
                             <Edit className="w-3 h-3 mr-1" />
-                            {t('common.edit')}
+                            Modifier
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleDeleteClick(product.id, product.name)} className="h-8 hover:bg-destructive hover:text-destructive-foreground">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteClick(product.id, product.name)}
+                            className="h-8 hover:bg-destructive hover:text-destructive-foreground"
+                          >
                             <Trash2 className="w-3 h-3" />
                           </Button>
                         </div>
@@ -1686,27 +2095,28 @@ export const ProductManagement = () => {
             </div>
           </ScrollArea>
         ) : (
+          /* Table View */
           <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t('products.tableHeaders.name')}</TableHead>
-                <TableHead className="hidden md:table-cell">{t('products.tableHeaders.barcode')}</TableHead>
-                <TableHead>{t('products.tableHeaders.category')}</TableHead>
-                <TableHead className="hidden sm:table-cell">{t('common.unit')}</TableHead>
-                <TableHead className="hidden sm:table-cell">{t('products.tableHeaders.saleType')}</TableHead>
-                <TableHead>{t('products.tableHeaders.currency')}</TableHead>
-                <TableHead>{t('products.tableHeaders.price')}</TableHead>
-                <TableHead>{t('products.tableHeaders.stock')}</TableHead>
-                <TableHead className="hidden sm:table-cell">{t('products.tableHeaders.status')}</TableHead>
-                <TableHead className="text-right">{t('common.actions')}</TableHead>
+                <TableHead>Nom</TableHead>
+                <TableHead className="hidden md:table-cell">Code-barres</TableHead>
+                <TableHead>Catégorie</TableHead>
+                <TableHead className="hidden sm:table-cell">Unité</TableHead>
+                <TableHead className="hidden sm:table-cell">Type</TableHead>
+                <TableHead>Devise</TableHead>
+                <TableHead>Prix</TableHead>
+                <TableHead>Stock</TableHead>
+                <TableHead className="hidden sm:table-cell">Statut</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedProducts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                    {t('products.noProducts')}
+                    Aucun produit trouvé
                   </TableCell>
                 </TableRow>
               ) : (
@@ -1722,7 +2132,7 @@ export const ProductManagement = () => {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
-                        {getCategoryLabel(product.category)}
+                        {getCategoryDisplay(product)}
                       </Badge>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
@@ -1730,7 +2140,7 @@ export const ProductManagement = () => {
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
                       <Badge variant={product.sale_type === 'retail' ? "default" : "secondary"}>
-                        {product.sale_type === 'retail' ? t('products.retail') : t('products.wholesale')}
+                        {product.sale_type === 'retail' ? 'Détail' : 'Gros'}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -1762,21 +2172,32 @@ export const ProductManagement = () => {
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
                       <Badge variant={product.is_active ? "default" : "secondary"}>
-                        {product.is_active ? t('common.active') : t('common.inactive')}
+                        {product.is_active ? "Actif" : "Inactif"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       {isAdmin ? (
                         <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="outline" onClick={() => handleEdit(product)} title={t('common.edit')}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEdit(product)}
+                            title="Modifier"
+                          >
                             <Edit className="w-3 h-3" />
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleDeleteClick(product.id, product.name)} className="hover:bg-destructive hover:text-destructive-foreground" title={t('common.delete')}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteClick(product.id, product.name)}
+                            className="hover:bg-destructive hover:text-destructive-foreground"
+                            title="Supprimer"
+                          >
                             <Trash2 className="w-3 h-3" />
                           </Button>
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span className="text-xs text-muted-foreground">Admin seulement</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -1784,9 +2205,8 @@ export const ProductManagement = () => {
               )}
             </TableBody>
           </Table>
-          </div>
+        </div>
         )}
-
         <TablePagination
           currentPage={currentPage}
           totalPages={totalPages}
@@ -1798,20 +2218,26 @@ export const ProductManagement = () => {
           hasNextPage={hasNextPage}
         />
       </CardContent>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({...deleteDialog, open})}>
+      
+      <AlertDialog open={deleteDialog.open} onOpenChange={(open) => 
+        setDeleteDialog({open, productId: null, productName: ''})
+      }>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('products.confirmDelete')}</AlertDialogTitle>
+            <AlertDialogTitle>Supprimer ce produit ?</AlertDialogTitle>
             <AlertDialogDescription>
-              {t('products.confirmDeleteDesc', { name: deleteDialog.productName })}
+              Vous êtes sur le point de supprimer <strong>{deleteDialog.productName}</strong>.
+              {' '}Si ce produit est utilisé dans des ventes existantes, il sera désactivé au lieu d'être supprimé définitivement.
+              {' '}Sinon, cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
-              {t('common.delete')}
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Supprimer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

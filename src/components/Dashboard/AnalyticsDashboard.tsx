@@ -39,8 +39,7 @@ import {
   getDay,
   getHours,
 } from 'date-fns';
-import { getDateFnsLocale } from '@/lib/locale';
-import { useTranslation } from 'react-i18next';
+import { fr } from 'date-fns/locale';
 import {
   BarChart,
   Bar,
@@ -91,7 +90,6 @@ const COLORS = [
 ];
 
 export const AnalyticsDashboard = () => {
-  const { t } = useTranslation();
   const saleCalc = useSaleCalculations();
 
   const [period, setPeriod] = useState<Period>('week');
@@ -120,10 +118,10 @@ export const AnalyticsDashboard = () => {
         prevTo = endOfDay(subDays(now, 1));
         break;
       case 'week':
-        from = startOfWeek(now, { locale: getDateFnsLocale() });
-        to = endOfWeek(now, { locale: getDateFnsLocale() });
-        prevFrom = startOfWeek(subDays(from, 1), { locale: getDateFnsLocale() });
-        prevTo = endOfWeek(subDays(from, 1), { locale: getDateFnsLocale() });
+        from = startOfWeek(now, { locale: fr });
+        to = endOfWeek(now, { locale: fr });
+        prevFrom = startOfWeek(subDays(from, 1), { locale: fr });
+        prevTo = endOfWeek(subDays(from, 1), { locale: fr });
         break;
       case 'month':
         from = startOfMonth(now);
@@ -154,9 +152,8 @@ export const AnalyticsDashboard = () => {
 
     // Fetch company settings for rate and currency
     const { data: settings } = await supabase
-      .from('companies')
+      .from('company_settings')
       .select('usd_htg_rate, default_display_currency')
-      .limit(1)
       .single();
     const rate = settings?.usd_htg_rate || 132;
     setUsdHtgRate(rate);
@@ -274,7 +271,7 @@ export const AnalyticsDashboard = () => {
       const dayItems = saleItems.filter(i => daySales.some(s => s.id === (i as any).sale_id));
 
       return {
-        date: format(day, 'dd/MM', { locale: getDateFnsLocale() }),
+        date: format(day, 'dd/MM', { locale: fr }),
         revenue: saleCalc.calculateRevenueTTC(daySales as SaleForCalc[], dayItems as any),
         profit: saleCalc.calculateNetProfit(daySales as SaleForCalc[], dayItems as any),
         salesCount: daySales.length,
@@ -319,7 +316,7 @@ export const AnalyticsDashboard = () => {
       );
 
       return {
-        label: format(day, 'EEE', { locale: getDateFnsLocale() }),
+        label: format(day, 'EEE', { locale: fr }),
         current: saleCalc ? saleCalc.calculateRevenueTTC(currentDaySales as SaleForCalc[], currentDayItems as any) : 0,
         previous: saleCalc ? saleCalc.calculateRevenueTTC(prevDaySales as SaleForCalc[], prevDayItems as any) : 0,
       };
@@ -382,11 +379,11 @@ export const AnalyticsDashboard = () => {
   }, [saleItems, usdHtgRate, displayCurrency]);
 
   const periodLabels: Record<Period, string> = {
-    today: t('analytics.periods.today'),
-    week: t('analytics.periods.week'),
-    month: t('analytics.periods.month'),
-    quarter: t('analytics.periods.quarter'),
-    custom: t('analytics.periods.custom'),
+    today: "Aujourd'hui",
+    week: 'Cette semaine',
+    month: 'Ce mois',
+    quarter: '90 jours',
+    custom: 'Personnalisé',
   };
 
   return (
@@ -395,9 +392,9 @@ export const AnalyticsDashboard = () => {
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            <h2 className="text-lg sm:text-2xl font-bold text-foreground">{t('analytics.title')}</h2>
+            <h2 className="text-lg sm:text-2xl font-bold text-foreground">Analytics</h2>
             <span className="text-[10px] sm:text-xs text-muted-foreground">
-              {t('analytics.updated')}: {format(lastRefresh, 'HH:mm:ss', { locale: getDateFnsLocale() })}
+              MàJ: {format(lastRefresh, 'HH:mm:ss', { locale: fr })}
             </span>
           </div>
         </div>
@@ -415,7 +412,7 @@ export const AnalyticsDashboard = () => {
                 : 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700'
             }`}
           >
-            {t('analytics.display')}: {displayCurrency === 'USD' ? '$ USD' : 'HTG'}
+            Affichage: {displayCurrency === 'USD' ? '$ USD' : 'HTG'}
           </Badge>
 
           <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
@@ -423,11 +420,11 @@ export const AnalyticsDashboard = () => {
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="z-[100]">
-              <SelectItem value="today">{t('analytics.periods.today')}</SelectItem>
-              <SelectItem value="week">{t('analytics.periods.week')}</SelectItem>
-              <SelectItem value="month">{t('analytics.periods.month')}</SelectItem>
-              <SelectItem value="quarter">{t('analytics.periods.quarter')}</SelectItem>
-              <SelectItem value="custom">{t('analytics.periods.custom')}</SelectItem>
+              <SelectItem value="today">Aujourd'hui</SelectItem>
+              <SelectItem value="week">Cette semaine</SelectItem>
+              <SelectItem value="month">Ce mois</SelectItem>
+              <SelectItem value="quarter">90 jours</SelectItem>
+              <SelectItem value="custom">Personnalisé</SelectItem>
             </SelectContent>
           </Select>
 
@@ -448,7 +445,7 @@ export const AnalyticsDashboard = () => {
                       setDateRange({ from: range.from, to: range.to });
                     }
                   }}
-                  locale={getDateFnsLocale()}
+                  locale={fr}
                 />
               </PopoverContent>
             </Popover>
@@ -463,7 +460,7 @@ export const AnalyticsDashboard = () => {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <KPICard
-          title={t('analytics.revenue')}
+          title="Revenus"
           value={kpis.revenue.current}
           previousValue={kpis.revenue.previous}
           icon={DollarSign}
@@ -471,7 +468,7 @@ export const AnalyticsDashboard = () => {
           currency={displayCurrency}
         />
         <KPICard
-          title={t('analytics.profit')}
+          title="Bénéfices"
           value={kpis.profit.current}
           previousValue={kpis.profit.previous}
           icon={TrendingUp}
@@ -480,14 +477,14 @@ export const AnalyticsDashboard = () => {
           currency={displayCurrency}
         />
         <KPICard
-          title={t('analytics.sales')}
+          title="Ventes"
           value={kpis.sales.current}
           previousValue={kpis.sales.previous}
           icon={ShoppingCart}
           format="number"
         />
         <KPICard
-          title={t('analytics.avgTicket')}
+          title="Panier moyen"
           value={kpis.avgTicket.current}
           previousValue={kpis.avgTicket.previous}
           icon={Target}
@@ -496,18 +493,18 @@ export const AnalyticsDashboard = () => {
       </div>
 
       {/* Main Trend Chart - without Brush */}
-      <TrendChart data={trendData} title={`${t('analytics.salesTrend')} - ${periodLabels[period]}`} showBrush={false} height={250} currency={displayCurrency} />
+      <TrendChart data={trendData} title={`Tendance des ventes - ${periodLabels[period]}`} showBrush={false} height={250} currency={displayCurrency} />
 
       {/* Tabs for different views */}
       <Tabs defaultValue="comparison" className="space-y-4">
         <TabsList>
           <TabsTrigger value="comparison" className="gap-2">
             <BarChart3 className="w-4 h-4" />
-            {t('analytics.comparison')}
+            Comparaison
           </TabsTrigger>
           <TabsTrigger value="distribution" className="gap-2">
             <PieChartIcon className="w-4 h-4" />
-            {t('analytics.distribution')}
+            Distribution
           </TabsTrigger>
         </TabsList>
 
@@ -515,12 +512,12 @@ export const AnalyticsDashboard = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ComparisonChart 
               data={comparisonData} 
-              title={t('analytics.comparisonTitle')}
+              title="Comparaison vs période précédente"
               currency={displayCurrency}
             />
             <HeatmapChart 
               data={heatmapData} 
-              title={t('analytics.heatmapTitle')}
+              title="Activité par heure et jour"
             />
           </div>
         </TabsContent>
@@ -532,7 +529,7 @@ export const AnalyticsDashboard = () => {
               <CardHeader className="pb-2 shrink-0">
                 <CardTitle className="text-sm sm:text-lg font-semibold flex items-center gap-2">
                   <BarChart3 className="h-4 w-4 text-primary" />
-                  {t('analytics.topProducts')}
+                  Top 10 Produits
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex-1">
@@ -564,7 +561,7 @@ export const AnalyticsDashboard = () => {
                         tickLine={false}
                       />
                       <Tooltip 
-                        formatter={(value: number) => [displayCurrency === 'USD' ? `$${formatNumber(value)}` : `${formatNumber(value)} HTG`, t('analytics.revenue')]}
+                        formatter={(value: number) => [displayCurrency === 'USD' ? `$${formatNumber(value)}` : `${formatNumber(value)} HTG`, 'Revenus']}
                         contentStyle={{ 
                           backgroundColor: 'hsl(var(--card))',
                           border: '1px solid hsl(var(--border))',
@@ -597,7 +594,7 @@ export const AnalyticsDashboard = () => {
               <CardHeader className="pb-2 shrink-0">
                 <CardTitle className="text-sm sm:text-lg font-semibold text-card-foreground flex items-center gap-2">
                   <PieChartIcon className="h-4 w-4 text-primary" />
-                  {t('analytics.categoryDistribution')}
+                  Distribution par catégorie
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex-1">
@@ -624,7 +621,7 @@ export const AnalyticsDashboard = () => {
                           ))}
                         </Pie>
                         <Tooltip 
-                          formatter={(value: number) => [displayCurrency === 'USD' ? `$${formatNumber(value)}` : `${formatNumber(value)} HTG`, t('analytics.revenue')]}
+                          formatter={(value: number) => [displayCurrency === 'USD' ? `$${formatNumber(value)}` : `${formatNumber(value)} HTG`, 'Revenus']}
                           contentStyle={{ 
                             backgroundColor: 'hsl(var(--card))',
                             border: '1px solid hsl(var(--border))',
@@ -674,7 +671,7 @@ export const AnalyticsDashboard = () => {
       {/* Period Summary Badge */}
       <div className="flex justify-center">
         <Badge variant="outline" className="text-sm">
-          {periodLabels[period]} • {t('analytics.salesSummary', { count: sales.length })} • {displayCurrency === 'USD' ? '$' : ''}{formatNumber(kpis.revenue.current)} {displayCurrency === 'HTG' ? 'HTG' : ''}
+          {periodLabels[period]} • {sales.length} vente{sales.length !== 1 ? 's' : ''} • {displayCurrency === 'USD' ? '$' : ''}{formatNumber(kpis.revenue.current)} {displayCurrency === 'HTG' ? 'HTG' : ''}
         </Badge>
       </div>
     </div>
