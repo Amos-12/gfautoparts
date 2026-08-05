@@ -1,11 +1,13 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { LanguageSelector } from '@/components/ui/language-selector';
 import { 
   Package, 
   ShoppingCart, 
@@ -46,7 +48,8 @@ export const ResponsiveDashboardLayout = ({
   currentSection = 'dashboard',
   onSectionChange 
 }: ResponsiveDashboardLayoutProps) => {
-  const { signOut, profile } = useAuth();
+  const { t } = useTranslation();
+  const { signOut, profile, role: authRole } = useAuth();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -56,7 +59,7 @@ export const ResponsiveDashboardLayout = ({
   useEffect(() => {
     const fetchCompanySettings = async () => {
       const { data, error } = await supabase
-        .from('company_settings')
+        .from('companies')
         .select('*')
         .limit(1)
         .maybeSingle();
@@ -115,29 +118,29 @@ export const ResponsiveDashboardLayout = ({
   }, [role]);
 
   const adminNavItems = [
-    { icon: Home, label: 'Dashboard', value: 'dashboard' },
-    { icon: BarChart3, label: 'Analytics', value: 'analytics' },
-    { icon: FolderTree, label: 'Catégories', value: 'categories' },
-    { icon: Package, label: 'Produits', value: 'products' },
-    { icon: ShoppingCart, label: 'Ventes', value: 'sales' },
-    { icon: Warehouse, label: 'Inventaire', value: 'inventory', route: '/inventory' },
-    { icon: Users, label: 'Utilisateurs', value: 'users' },
-    { icon: UserCheck, label: 'Perf. Vendeurs', value: 'seller-reports' },
-    { icon: TrendingUp, label: 'Rapports', value: 'reports' },
-    { icon: Receipt, label: 'Rapport TVA', value: 'tva-report' },
-    { icon: ClipboardList, label: "Logs", value: 'activity' },
-    { icon: Bell, label: 'Notifications', value: 'notifications' },
-    { icon: Settings, label: 'Paramètres', value: 'settings' },
-    { icon: Database, label: 'Base de données', value: 'database' },
-    { icon: HelpCircle, label: 'Aide', value: 'help', route: '/help' }
+    { icon: Home, label: t('nav.dashboard'), value: 'dashboard' },
+    { icon: BarChart3, label: t('nav.analytics'), value: 'analytics' },
+    { icon: FolderTree, label: t('nav.categories'), value: 'categories' },
+    { icon: Package, label: t('nav.products'), value: 'products' },
+    { icon: ShoppingCart, label: t('nav.sales'), value: 'sales' },
+    { icon: Warehouse, label: t('nav.inventory'), value: 'inventory', route: '/inventory' },
+    { icon: Users, label: t('nav.users'), value: 'users' },
+    { icon: UserCheck, label: t('nav.sellerReports'), value: 'seller-reports' },
+    { icon: TrendingUp, label: t('nav.reports'), value: 'reports' },
+    { icon: Receipt, label: t('nav.tvaReport'), value: 'tva-report' },
+    { icon: ClipboardList, label: t('nav.activityLogs'), value: 'activity' },
+    { icon: Bell, label: t('nav.notifications'), value: 'notifications' },
+    { icon: Settings, label: t('nav.settings'), value: 'settings' },
+    ...(authRole === 'super_admin' ? [{ icon: Database, label: t('nav.database'), value: 'database' }] : []),
+    { icon: HelpCircle, label: t('nav.help'), value: 'help', route: '/help' }
   ];
 
   const sellerNavItems = [
-    { icon: Home, label: 'Dashboard', value: 'dashboard' },
-    { icon: ShoppingCart, label: 'Nouvelle vente', value: 'sale' },
-    { icon: Receipt, label: 'Pro-forma', value: 'proforma' },
-    { icon: TrendingUp, label: 'Mes ventes', value: 'history' },
-    { icon: HelpCircle, label: 'Aide', value: 'help', route: '/help' }
+    { icon: Home, label: t('nav.dashboard'), value: 'dashboard' },
+    { icon: ShoppingCart, label: t('nav.newSale'), value: 'sale' },
+    { icon: Receipt, label: t('nav.proforma'), value: 'proforma' },
+    { icon: TrendingUp, label: t('nav.mySales'), value: 'history' },
+    { icon: HelpCircle, label: t('nav.help'), value: 'help', route: '/help' }
   ];
 
   const navItems = role === 'admin' ? adminNavItems : sellerNavItems;
@@ -188,12 +191,12 @@ export const ResponsiveDashboardLayout = ({
           <>
             <h2 className={cn(
               "font-semibold text-foreground",
-              (companySettings?.company_name || title).length > 30 ? "text-sm" : "text-base"
+              (companySettings?.name || title).length > 30 ? "text-sm" : "text-base"
             )}>
-              {companySettings?.company_name || title}
+              {companySettings?.name || title}
             </h2>
             <Badge variant={role === 'admin' ? 'default' : 'secondary'} className="mt-2">
-              {role === 'admin' ? 'Administrateur' : 'Vendeur'}
+              {role === 'admin' ? t('roles.admin') : t('roles.seller')}
             </Badge>
           </>
         )}
@@ -254,7 +257,7 @@ export const ResponsiveDashboardLayout = ({
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
                   <polyline points="15 18 9 12 15 6"/>
                 </svg>
-                Réduire
+                {t('nav.collapse')}
               </>
             )}
           </Button>
@@ -306,10 +309,10 @@ export const ResponsiveDashboardLayout = ({
                         <User className="w-4 h-4 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-xs truncate">{profile?.full_name || 'Utilisateur'}</p>
+                        <p className="font-medium text-xs truncate">{profile?.full_name || t('profile.user')}</p>
                       </div>
                       <Badge variant={role === 'admin' ? 'default' : 'secondary'} className="text-[9px] px-1.5 py-0.5">
-                        {role === 'admin' ? 'Admin' : 'Vendeur'}
+                        {role === 'admin' ? 'Admin' : t('roles.seller')}
                       </Badge>
                     </div>
                   </div>
@@ -337,11 +340,11 @@ export const ResponsiveDashboardLayout = ({
                 )}
                 <h1 className={cn(
                   "font-bold text-primary hidden sm:block max-w-[150px] md:max-w-[250px] lg:max-w-none truncate",
-                  (companySettings?.company_name || 'Gestion de Stock').length > 30 
+                  (companySettings?.name || 'Gestion de Stock').length > 30 
                     ? "text-base lg:text-lg" 
                     : "text-lg lg:text-xl"
                 )}>
-                  {companySettings?.company_name || 'Gestion de Stock'}
+                  {companySettings?.name || 'Gestion de Stock'}
                 </h1>
               </div>
             </div>
@@ -388,6 +391,7 @@ export const ResponsiveDashboardLayout = ({
                 <User className="w-4 h-4" />
               </Button>
 
+              <LanguageSelector />
               <ThemeToggle />
 
               <Button 
@@ -397,7 +401,7 @@ export const ResponsiveDashboardLayout = ({
                 className="hover:bg-destructive hover:text-destructive-foreground transition-smooth flex-shrink-0"
               >
                 <LogOut className="w-4 h-4 sm:mr-2" />
-                <span className="hidden md:inline">Déconnexion</span>
+                <span className="hidden md:inline">{t('auth.signOut')}</span>
               </Button>
             </div>
           </div>

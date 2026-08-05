@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import logo from '@/assets/logo.png';
 
 const Index = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, profile, loading, isActive, signOut } = useAuth();
   const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
@@ -25,12 +27,12 @@ const Index = () => {
   useEffect(() => {
     const fetchCompanyName = async () => {
       const { data } = await supabase
-        .from('company_settings')
-        .select('company_name')
+        .from('companies')
+        .select('name')
         .limit(1)
         .maybeSingle();
-      if (data?.company_name && mountedRef.current) {
-        setCompanyName(data.company_name);
+      if (data?.name && mountedRef.current) {
+        setCompanyName(data.name);
       }
     };
     fetchCompanyName();
@@ -52,8 +54,8 @@ const Index = () => {
 
       if (mountedRef.current) {
         toast({
-          title: "Compte admin créé",
-          description: "Vous êtes maintenant administrateur. Redirection en cours...",
+          title: t('index.adminCreatedTitle'),
+          description: t('index.adminCreatedDescription'),
         });
         
         // Use navigate instead of window.location for better React integration
@@ -67,8 +69,8 @@ const Index = () => {
       console.error('Error creating admin:', error);
       if (mountedRef.current) {
         toast({
-          title: "Erreur",
-          description: "Impossible de créer le compte admin",
+          title: t('common.error'),
+          description: t('index.adminCreateError'),
           variant: "destructive"
         });
       }
@@ -88,7 +90,9 @@ const Index = () => {
   // Redirect based on user role using navigate instead of window.location
   useEffect(() => {
     if (profile?.role && isActive && mountedRef.current) {
-      if (profile.role === 'admin') {
+      if (profile.role === 'super_admin') {
+        navigate('/super-admin', { replace: true });
+      } else if (profile.role === 'admin') {
         navigate('/admin', { replace: true });
       } else if (profile.role === 'seller') {
         navigate('/seller', { replace: true });
@@ -105,7 +109,7 @@ const Index = () => {
         />
         <div className="text-center">
           <img src={logo} alt="Logo" className="w-14 h-14 object-contain mx-auto mb-4 animate-pulse" />
-          <p className="text-muted-foreground">Chargement de votre espace...</p>
+          <p className="text-muted-foreground">{t('index.loadingWorkspace')}</p>
         </div>
       </div>
     );
@@ -123,20 +127,20 @@ const Index = () => {
           <CardHeader className="text-center">
             <div className="flex items-center justify-center mb-4">
               <img src={logo} alt="Logo" className="w-12 h-12 object-contain mr-3" />
-              <CardTitle className="text-2xl">{companyName || 'Bienvenue'}</CardTitle>
+              <CardTitle className="text-2xl">{companyName || t('index.welcome')}</CardTitle>
             </div>
             <p className="text-muted-foreground">
-              Système de gestion de stock et de vente
+              {t('index.systemDescription')}
             </p>
           </CardHeader>
           <CardContent className="text-center">
-            <p className="mb-6">Veuillez vous connecter pour accéder à votre espace de travail.</p>
+            <p className="mb-6">{t('index.signInPrompt')}</p>
             <Button 
               onClick={() => navigate('/auth')} 
               variant="hero" 
               className="w-full"
             >
-              Se connecter
+              {t('auth.signIn')}
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </CardContent>
@@ -145,8 +149,8 @@ const Index = () => {
     );
   }
 
-  // Show inactive account message
-  if (user && !isActive) {
+  // Show inactive account message (super_admin bypasses this)
+  if (user && !isActive && profile?.role !== 'super_admin') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-light to-background p-4 pt-[calc(16px+var(--safe-area-top,0px))] pb-[calc(16px+var(--safe-area-bottom,0px))]">
         {/* Safe area background */}
@@ -159,21 +163,21 @@ const Index = () => {
             <div className="flex items-center justify-center mb-2">
               <Shield className="w-8 h-8 text-warning" />
             </div>
-            <CardTitle>Compte en attente d'approbation</CardTitle>
+            <CardTitle>{t('index.pendingApprovalTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="text-center space-y-4">
             <p className="text-muted-foreground">
-              Votre compte a été créé avec succès, mais il doit être approuvé par un administrateur avant que vous puissiez accéder au système.
+              {t('index.pendingApprovalDescription')}
             </p>
             <p className="text-sm text-muted-foreground">
-              Veuillez contacter votre administrateur pour activer votre compte.
+              {t('index.contactAdmin')}
             </p>
             <Button 
               onClick={signOut} 
               variant="destructive" 
               className="w-full"
             >
-              Se déconnecter
+              {t('auth.signOut')}
             </Button>
           </CardContent>
         </Card>
@@ -191,25 +195,23 @@ const Index = () => {
       />
       <Card className="max-w-md w-full shadow-lg">
         <CardHeader className="text-center">
-          <CardTitle>Configuration en cours</CardTitle>
+          <CardTitle>{t('index.setupTitle')}</CardTitle>
         </CardHeader>
         <CardContent className="text-center space-y-4">
-          <p className="mb-4">Votre compte est en cours de configuration...</p>
+          <p className="mb-4">{t('index.setupDescription')}</p>
           <div className="space-y-2">
             <Button onClick={() => {
               if (mountedRef.current) window.location.reload();
             }} variant="outline" className="w-full">
-              Actualiser
+              {t('common.refresh')}
             </Button>
-            {/* <Button 
-              onClick={handleCreateAdmin} 
-              variant="default" 
+            <Button 
+              onClick={signOut} 
+              variant="destructive" 
               className="w-full"
-              disabled={isCreatingAdmin}
             >
-              <Shield className="w-4 h-4 mr-2" />
-              {isCreatingAdmin ? 'Création...' : 'Créer le compte admin'}
-            </Button> */}
+              {t('auth.signOut')}
+            </Button>
           </div>
         </CardContent>
       </Card>

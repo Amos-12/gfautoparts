@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,36 +29,37 @@ import {
 import { useActivityLog, ActivityLogFilter } from '@/hooks/useActivityLog';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { getDateFnsLocale } from '@/lib/locale';
 
-const ACTION_TYPES = [
-  { value: 'sale_created', label: 'Vente créée', icon: ShoppingCart, color: 'bg-green-500' },
-  { value: 'sale_deleted', label: 'Vente supprimée', icon: Trash2, color: 'bg-red-500' },
-  { value: 'sale_cancelled', label: 'Vente annulée', icon: XCircle, color: 'bg-orange-500' },
-  { value: 'product_added', label: 'Produit ajouté', icon: Package, color: 'bg-blue-500' },
-  { value: 'product_updated', label: 'Produit modifié', icon: Edit, color: 'bg-yellow-500' },
-  { value: 'product_deactivated', label: 'Produit désactivé', icon: Trash2, color: 'bg-red-500' },
-  { value: 'product_deleted', label: 'Produit supprimé', icon: Trash2, color: 'bg-red-500' },
-  { value: 'stock_adjusted', label: 'Stock ajusté', icon: Package, color: 'bg-purple-500' },
-  { value: 'category_created', label: 'Catégorie créée', icon: FolderPlus, color: 'bg-green-500' },
-  { value: 'category_updated', label: 'Catégorie modifiée', icon: Layers, color: 'bg-yellow-500' },
-  { value: 'category_deleted', label: 'Catégorie supprimée', icon: Trash2, color: 'bg-red-500' },
-  { value: 'subcategory_created', label: 'Sous-cat. créée', icon: FolderPlus, color: 'bg-green-500' },
-  { value: 'subcategory_updated', label: 'Sous-cat. modifiée', icon: Layers, color: 'bg-yellow-500' },
-  { value: 'subcategory_deleted', label: 'Sous-cat. supprimée', icon: Trash2, color: 'bg-red-500' },
-  { value: 'user_approved', label: 'Utilisateur approuvé', icon: UserCheck, color: 'bg-green-500' },
-  { value: 'user_deactivated', label: 'Utilisateur désactivé', icon: UserX, color: 'bg-red-500' },
-  { value: 'user_deleted', label: 'Utilisateur supprimé', icon: Trash2, color: 'bg-red-500' },
-  { value: 'user_login', label: 'Connexion', icon: UserCheck, color: 'bg-blue-500' },
-  { value: 'user_logout', label: 'Déconnexion', icon: UserX, color: 'bg-gray-500' },
-  { value: 'user_signup', label: 'Inscription', icon: UserCheck, color: 'bg-green-500' },
-  { value: 'user_update_password', label: 'Changement mot de passe', icon: Edit, color: 'bg-orange-500' },
-  { value: 'connection_failed', label: 'Échec connexion', icon: UserX, color: 'bg-red-500' },
-  { value: 'system_cleanup', label: 'Nettoyage système', icon: Database, color: 'bg-gray-500' },
-  { value: 'settings_updated', label: 'Paramètres modifiés', icon: Edit, color: 'bg-blue-500' },
-];
+const ACTION_META: Record<string, { icon: any; color: string }> = {
+  sale_created: { icon: ShoppingCart, color: 'bg-green-500' },
+  sale_deleted: { icon: Trash2, color: 'bg-red-500' },
+  sale_cancelled: { icon: XCircle, color: 'bg-orange-500' },
+  product_added: { icon: Package, color: 'bg-blue-500' },
+  product_updated: { icon: Edit, color: 'bg-yellow-500' },
+  product_deactivated: { icon: Trash2, color: 'bg-red-500' },
+  product_deleted: { icon: Trash2, color: 'bg-red-500' },
+  stock_adjusted: { icon: Package, color: 'bg-purple-500' },
+  category_created: { icon: FolderPlus, color: 'bg-green-500' },
+  category_updated: { icon: Layers, color: 'bg-yellow-500' },
+  category_deleted: { icon: Trash2, color: 'bg-red-500' },
+  subcategory_created: { icon: FolderPlus, color: 'bg-green-500' },
+  subcategory_updated: { icon: Layers, color: 'bg-yellow-500' },
+  subcategory_deleted: { icon: Trash2, color: 'bg-red-500' },
+  user_approved: { icon: UserCheck, color: 'bg-green-500' },
+  user_deactivated: { icon: UserX, color: 'bg-red-500' },
+  user_deleted: { icon: Trash2, color: 'bg-red-500' },
+  user_login: { icon: UserCheck, color: 'bg-blue-500' },
+  user_logout: { icon: UserX, color: 'bg-gray-500' },
+  user_signup: { icon: UserCheck, color: 'bg-green-500' },
+  user_update_password: { icon: Edit, color: 'bg-orange-500' },
+  connection_failed: { icon: UserX, color: 'bg-red-500' },
+  system_cleanup: { icon: Database, color: 'bg-gray-500' },
+  settings_updated: { icon: Edit, color: 'bg-blue-500' },
+};
 
 export const ActivityLogPanel = () => {
+  const { t } = useTranslation();
   const { logs, loading, totalCount, fetchActivityLogs } = useActivityLog();
   const [filters, setFilters] = useState<ActivityLogFilter>({});
   const [searchTerm, setSearchTerm] = useState('');
@@ -66,6 +68,17 @@ export const ActivityLogPanel = () => {
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
   const pageSize = 20;
+
+  const dateLocale = getDateFnsLocale();
+
+  const ACTION_TYPES = useMemo(
+    () => Object.keys(ACTION_META).map(value => ({
+      value,
+      label: t(`activityLog.actions.${value}`, value),
+      ...ACTION_META[value],
+    })),
+    [t]
+  );
 
   useEffect(() => {
     loadLogs();
@@ -110,26 +123,26 @@ export const ActivityLogPanel = () => {
   };
 
   const getActionIcon = (actionType: string) => {
-    const action = ACTION_TYPES.find(a => a.value === actionType);
-    if (!action) return <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />;
-    const Icon = action.icon;
+    const meta = ACTION_META[actionType];
+    if (!meta) return <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />;
+    const Icon = meta.icon;
     return <Icon className="w-3 h-3 sm:w-4 sm:h-4" />;
   };
 
   const getActionBadge = (actionType: string) => {
-    const action = ACTION_TYPES.find(a => a.value === actionType);
-    if (!action) return <Badge variant="secondary" className="text-[10px] sm:text-xs">{actionType}</Badge>;
+    const meta = ACTION_META[actionType];
+    const label = t(`activityLog.actions.${actionType}`, actionType);
+    if (!meta) return <Badge variant="secondary" className="text-[10px] sm:text-xs">{actionType}</Badge>;
     
     return (
-      <Badge className={`${action.color} text-white text-[10px] sm:text-xs`}>
-        <span className="hidden sm:inline">{action.label}</span>
-        <span className="sm:hidden">{action.label.split(' ')[0]}</span>
+      <Badge className={`${meta.color} text-white text-[10px] sm:text-xs`}>
+        <span className="hidden sm:inline">{label}</span>
+        <span className="sm:hidden">{label.split(' ')[0]}</span>
       </Badge>
     );
   };
 
   const getCurrencyBadge = (log: { action_type: string; metadata?: { currency?: string } }) => {
-    // Only show for sale transactions
     if (!['sale_created', 'sale_deleted', 'sale_cancelled'].includes(log.action_type)) {
       return null;
     }
@@ -160,15 +173,14 @@ export const ActivityLogPanel = () => {
         <CardHeader className="p-3 sm:p-6">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5" />
-            Logs d'activité
+            {t('activityLog.title')}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
           <div className="space-y-3 sm:space-y-4">
-            {/* Filters */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
               <div className="space-y-1 sm:space-y-2">
-                <label className="text-[10px] sm:text-sm font-medium">Type d'action</label>
+                <label className="text-[10px] sm:text-sm font-medium">{t('activityLog.actionType')}</label>
                 <Select
                   value={filters.action_type || 'all'}
                   onValueChange={(value) => {
@@ -180,10 +192,10 @@ export const ActivityLogPanel = () => {
                   }}
                 >
                   <SelectTrigger className="h-8 sm:h-10 text-xs sm:text-sm">
-                    <SelectValue placeholder="Tous" />
+                    <SelectValue placeholder={t('activityLog.all')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous les types</SelectItem>
+                    <SelectItem value="all">{t('activityLog.allTypes')}</SelectItem>
                     {ACTION_TYPES.map(type => (
                       <SelectItem key={type.value} value={type.value}>
                         {type.label}
@@ -194,7 +206,7 @@ export const ActivityLogPanel = () => {
               </div>
 
               <div className="space-y-1 sm:space-y-2">
-                <label className="text-[10px] sm:text-sm font-medium">Utilisateur</label>
+                <label className="text-[10px] sm:text-sm font-medium">{t('activityLog.user')}</label>
                 <Select
                   value={filters.user_id || 'all'}
                   onValueChange={(value) => {
@@ -206,10 +218,10 @@ export const ActivityLogPanel = () => {
                   }}
                 >
                   <SelectTrigger className="h-8 sm:h-10 text-xs sm:text-sm">
-                    <SelectValue placeholder="Tous" />
+                    <SelectValue placeholder={t('activityLog.all')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous</SelectItem>
+                    <SelectItem value="all">{t('activityLog.all')}</SelectItem>
                     {users.map(user => (
                       <SelectItem key={user.id} value={user.id}>
                         {user.full_name}
@@ -220,12 +232,12 @@ export const ActivityLogPanel = () => {
               </div>
 
               <div className="space-y-1 sm:space-y-2">
-                <label className="text-[10px] sm:text-sm font-medium">Date début</label>
+                <label className="text-[10px] sm:text-sm font-medium">{t('activityLog.dateFrom')}</label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="w-full justify-start h-8 sm:h-10 text-xs sm:text-sm">
                       <CalendarIcon className="mr-1 sm:mr-2 w-3 h-3 sm:w-4 sm:h-4" />
-                      {dateFrom ? format(dateFrom, 'dd/MM/yy', { locale: fr }) : <span className="hidden sm:inline">Sélectionner</span>}
+                      {dateFrom ? format(dateFrom, 'dd/MM/yy', { locale: dateLocale }) : <span className="hidden sm:inline">{t('activityLog.select')}</span>}
                       {!dateFrom && <span className="sm:hidden">-</span>}
                     </Button>
                   </PopoverTrigger>
@@ -234,19 +246,19 @@ export const ActivityLogPanel = () => {
                       mode="single"
                       selected={dateFrom}
                       onSelect={setDateFrom}
-                      locale={fr}
+                      locale={dateLocale}
                     />
                   </PopoverContent>
                 </Popover>
               </div>
 
               <div className="space-y-1 sm:space-y-2">
-                <label className="text-[10px] sm:text-sm font-medium">Date fin</label>
+                <label className="text-[10px] sm:text-sm font-medium">{t('activityLog.dateTo')}</label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="w-full justify-start h-8 sm:h-10 text-xs sm:text-sm">
                       <CalendarIcon className="mr-1 sm:mr-2 w-3 h-3 sm:w-4 sm:h-4" />
-                      {dateTo ? format(dateTo, 'dd/MM/yy', { locale: fr }) : <span className="hidden sm:inline">Sélectionner</span>}
+                      {dateTo ? format(dateTo, 'dd/MM/yy', { locale: dateLocale }) : <span className="hidden sm:inline">{t('activityLog.select')}</span>}
                       {!dateTo && <span className="sm:hidden">-</span>}
                     </Button>
                   </PopoverTrigger>
@@ -255,18 +267,17 @@ export const ActivityLogPanel = () => {
                       mode="single"
                       selected={dateTo}
                       onSelect={setDateTo}
-                      locale={fr}
+                      locale={dateLocale}
                     />
                   </PopoverContent>
                 </Popover>
               </div>
             </div>
 
-            {/* Search and actions */}
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="flex-1">
                 <Input
-                  placeholder="Rechercher..."
+                  placeholder={t('activityLog.searchPlaceholder')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
@@ -276,50 +287,48 @@ export const ActivityLogPanel = () => {
               <div className="flex gap-2">
                 <Button onClick={handleSearch} className="flex-1 sm:flex-none h-8 sm:h-10 text-xs sm:text-sm">
                   <Search className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Rechercher</span>
+                  <span className="hidden sm:inline">{t('activityLog.search')}</span>
                 </Button>
                 <Button variant="outline" onClick={handleReset} className="flex-1 sm:flex-none h-8 sm:h-10 text-xs sm:text-sm">
                   <RefreshCcw className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Réinitialiser</span>
+                  <span className="hidden sm:inline">{t('activityLog.reset')}</span>
                 </Button>
               </div>
             </div>
 
-            {/* Results count */}
             <div className="text-xs sm:text-sm text-muted-foreground">
-              {totalCount} résultat{totalCount > 1 ? 's' : ''}
+              {t('activityLog.resultsCount', { count: totalCount })}
             </div>
 
-            {/* Table */}
             <div className="border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs sm:text-sm min-w-[80px] sm:min-w-[140px]">Date</TableHead>
-                    <TableHead className="text-xs sm:text-sm min-w-[80px] sm:min-w-[150px]">Utilisateur</TableHead>
-                    <TableHead className="text-xs sm:text-sm min-w-[80px] sm:min-w-[140px]">Action</TableHead>
-                    <TableHead className="text-xs sm:text-sm hidden sm:table-cell min-w-[200px]">Description</TableHead>
+                    <TableHead className="text-xs sm:text-sm min-w-[80px] sm:min-w-[140px]">{t('activityLog.date')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm min-w-[80px] sm:min-w-[150px]">{t('activityLog.user')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm min-w-[80px] sm:min-w-[140px]">{t('activityLog.action')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm hidden sm:table-cell min-w-[200px]">{t('activityLog.description')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-6 sm:py-8 text-xs sm:text-sm">
-                        Chargement...
+                        {t('activityLog.loading')}
                       </TableCell>
                     </TableRow>
                   ) : logs.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-6 sm:py-8 text-xs sm:text-sm">
-                        Aucun log trouvé
+                        {t('activityLog.noLogsFound')}
                       </TableCell>
                     </TableRow>
                   ) : (
                     logs.map((log) => (
                       <TableRow key={log.id}>
                         <TableCell className="text-[10px] sm:text-sm font-mono">
-                          <span className="sm:hidden">{format(new Date(log.created_at), 'dd/MM HH:mm', { locale: fr })}</span>
-                          <span className="hidden sm:inline">{format(new Date(log.created_at), 'dd/MM/yyyy HH:mm', { locale: fr })}</span>
+                          <span className="sm:hidden">{format(new Date(log.created_at), 'dd/MM HH:mm', { locale: dateLocale })}</span>
+                          <span className="hidden sm:inline">{format(new Date(log.created_at), 'dd/MM/yyyy HH:mm', { locale: dateLocale })}</span>
                         </TableCell>
                         <TableCell className="text-xs sm:text-sm">
                           <div className="flex flex-col">
@@ -344,11 +353,10 @@ export const ActivityLogPanel = () => {
               </Table>
             </div>
 
-            {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex items-center justify-between">
                 <div className="text-[10px] sm:text-sm text-muted-foreground">
-                  Page {currentPage + 1}/{totalPages}
+                  {t('activityLog.page', { current: currentPage + 1, total: totalPages })}
                 </div>
                 <div className="flex gap-1 sm:gap-2">
                   <Button

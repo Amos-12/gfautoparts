@@ -5,7 +5,7 @@
 ## Prérequis
 
 1. **Android Studio** installé (dernière version)
-2. **Java JDK 17** ou supérieur
+2. **Java JDK 21** ou supérieur
 3. **Node.js** et **npm** installés
 
 ## Étape 1: Préparer le projet

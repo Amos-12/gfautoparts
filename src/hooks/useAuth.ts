@@ -2,21 +2,23 @@ import { useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import i18n from '@/i18n';
 
 export interface UserProfile {
   id: string;
   user_id: string;
   full_name: string;
   phone?: string;
-  role?: 'admin' | 'seller';
+  role?: 'admin' | 'seller' | 'super_admin';
   is_active?: boolean;
+  company_id?: string;
 }
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [role, setRole] = useState<'admin' | 'seller' | null>(null);
+  const [role, setRole] = useState<'admin' | 'seller' | 'super_admin' | null>(null);
   const [isActive, setIsActive] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
 
@@ -24,11 +26,13 @@ export const useAuth = () => {
     let isMounted = true;
 
     const fetchProfile = async (userId: string) => {
+      let fetchedRole: string | null = null;
       try {
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('user_id', userId)
+          .limit(1)
           .maybeSingle();
 
         if (profileError) throw profileError;
@@ -37,9 +41,13 @@ export const useAuth = () => {
           .from('user_roles')
           .select('role, is_active')
           .eq('user_id', userId)
+          .order('role', { ascending: true })
+          .limit(1)
           .maybeSingle();
 
         if (roleError) throw roleError;
+
+        fetchedRole = roleData?.role ?? null;
 
         if (!isMounted) return;
 
@@ -49,26 +57,28 @@ export const useAuth = () => {
           setProfile({
             ...profileData,
             role: (roleData?.role as any),
-            is_active: roleData?.is_active
+            is_active: roleData?.is_active,
+            company_id: profileData.company_id
           });
-          setRole(roleData?.role as 'admin' | 'seller' | null);
+          setRole(roleData?.role as 'admin' | 'seller' | 'super_admin' | null);
         } else {
-          // Graceful fallback when profile row doesn't exist yet
           setProfile({
             id: userId,
             user_id: userId,
             full_name: '',
             role: (roleData?.role as any),
-            is_active: roleData?.is_active
+            is_active: roleData?.is_active,
+            company_id: undefined
           });
-          setRole(roleData?.role as 'admin' | 'seller' | null);
+          setRole(roleData?.role as 'admin' | 'seller' | 'super_admin' | null);
         }
       } catch (error) {
         console.error('Error fetching profile:', error);
-        if (isMounted) {
+        // Don't show error toast for super_admin who may not have a profile row
+        if (isMounted && fetchedRole !== 'super_admin') {
           toast({
-            title: "Erreur",
-            description: "Impossible de charger le profil utilisateur",
+            title: i18n.t('common.error'),
+            description: i18n.t('toasts.auth.profileLoadError'),
             variant: "destructive"
           });
         }
@@ -119,7 +129,7 @@ export const useAuth = () => {
     };
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string, phone?: string) => {
+  const signUp = async (email: string, password: string, fullName: string, phone?: string, companyName?: string, companyId?: string) => {
     try {
       const redirectUrl = `${window.location.origin}/`;
       
@@ -130,7 +140,9 @@ export const useAuth = () => {
           emailRedirectTo: redirectUrl,
           data: {
             full_name: fullName,
-            phone: phone || ''
+            phone: phone || '',
+            company_name: companyName || '',
+            company_id: companyId || ''
           }
         }
       });
@@ -138,13 +150,13 @@ export const useAuth = () => {
       if (error) {
         if (error.message.includes('User already registered')) {
           toast({
-            title: "Compte existant",
-            description: "Un compte avec cet email existe déjà. Essayez de vous connecter.",
+            title: i18n.t('toasts.auth.accountExistsTitle'),
+            description: i18n.t('toasts.auth.accountExistsDescription'),
             variant: "destructive"
           });
         } else {
           toast({
-            title: "Erreur d'inscription",
+            title: i18n.t('toasts.auth.signupErrorTitle'),
             description: error.message,
             variant: "destructive"
           });
@@ -152,7 +164,7 @@ export const useAuth = () => {
         return { error };
       }
 
-      // Log successful signup
+      // Log successful signup (company_id not yet available at signup time)
       if (data.user) {
         await (supabase as any).from('activity_logs').insert({
           user_id: data.user.id,
@@ -164,8 +176,8 @@ export const useAuth = () => {
       }
 
       toast({
-        title: "Inscription réussie",
-        description: "Votre compte a été créé avec succès !",
+        title: i18n.t('toasts.auth.signupSuccessTitle'),
+        description: i18n.t('toasts.auth.signupSuccessDescription'),
       });
 
       return { error: null };
@@ -196,13 +208,13 @@ export const useAuth = () => {
 
         if (error.message.includes('Invalid login credentials')) {
           toast({
-            title: "Erreur de connexion",
-            description: "Email ou mot de passe incorrect",
+            title: i18n.t('toasts.auth.signinErrorTitle'),
+            description: i18n.t('toasts.auth.invalidCredentials'),
             variant: "destructive"
           });
         } else {
           toast({
-            title: "Erreur de connexion",
+            title: i18n.t('toasts.auth.signinErrorTitle'),
             description: error.message,
             variant: "destructive"
           });
@@ -212,8 +224,11 @@ export const useAuth = () => {
 
       // Log successful login
       if (data.user) {
+        // Fetch company_id for logging
+        const { data: profileData } = await supabase.from('profiles').select('company_id').eq('user_id', data.user.id).maybeSingle();
         await (supabase as any).from('activity_logs').insert({
           user_id: data.user.id,
+          company_id: profileData?.company_id || null,
           action_type: 'user_login',
           entity_type: 'auth',
           description: `Connexion réussie`,
@@ -223,14 +238,16 @@ export const useAuth = () => {
 
       // Fetch company name for welcome message
       const { data: companyData } = await supabase
-        .from('company_settings')
-        .select('company_name')
+        .from('companies')
+        .select('name')
         .limit(1)
         .maybeSingle();
 
       toast({
-        title: "Connexion réussie",
-        description: `Bienvenue sur ${companyData?.company_name || 'votre espace'} !`,
+        title: i18n.t('toasts.auth.signinSuccessTitle'),
+        description: i18n.t('toasts.auth.signinSuccessDescription', {
+          company: companyData?.name || i18n.t('index.workspaceFallback')
+        }),
       });
 
       return { error: null };
@@ -244,34 +261,42 @@ export const useAuth = () => {
     try {
       const currentUser = user;
       
-      // Log logout before signing out
+      // Log logout before signing out (best-effort, don't block on failure)
       if (currentUser) {
-        await (supabase as any).from('activity_logs').insert({
-          user_id: currentUser.id,
-          action_type: 'user_logout',
-          entity_type: 'auth',
-          description: `Déconnexion`,
-          metadata: { email: currentUser.email }
-        });
+        try {
+          await (supabase as any).from('activity_logs').insert({
+            user_id: currentUser.id,
+            company_id: profile?.company_id || null,
+            action_type: 'user_logout',
+            entity_type: 'auth',
+            description: `Déconnexion`,
+            metadata: { email: currentUser.email }
+          });
+        } catch (logErr) {
+          console.warn('Could not log logout activity:', logErr);
+        }
       }
 
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        toast({
-          title: "Erreur de déconnexion",
-          description: error.message,
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Déconnexion réussie",
-          description: "À bientôt !",
-        });
-        // Redirect to auth page after successful sign out
-        window.location.href = '/auth';
-      }
+      // Clear local state FIRST to prevent auto-redirect
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+      setRole(null);
+
+      // Sign out from Supabase (clears localStorage tokens)
+      await supabase.auth.signOut().catch(() => {});
+
+      toast({
+        title: i18n.t('toasts.auth.signoutSuccessTitle'),
+        description: i18n.t('toasts.auth.signoutSuccessDescription'),
+      });
+
+      // Hard redirect to /auth to fully reset app state
+      window.location.replace('/auth');
     } catch (error) {
       console.error('Signout error:', error);
+      // Force redirect even on unexpected errors
+      window.location.replace('/auth');
     }
   };
 

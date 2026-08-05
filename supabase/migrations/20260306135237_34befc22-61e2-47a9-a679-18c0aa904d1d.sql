@@ -1,0 +1,5 @@
+
+UPDATE public.subscription_plans SET max_users = 2, max_sales_monthly = 100, features = '["50 produits", "2 utilisateurs", "100 ventes/mois", "Ticket 58mm", "Dashboard basique", "1 boutique", "Support email"]'::jsonb WHERE id = 'trial';
+UPDATE public.subscription_plans SET max_sales_monthly = 999999, features = '["200 produits", "5 utilisateurs", "Ventes illimitées", "Facture A4", "Logo personnalisé", "Statistiques avancées", "Export Excel/PDF", "1 boutique", "Support email prioritaire"]'::jsonb WHERE id = 'basic';
+UPDATE public.subscription_plans SET max_sales_monthly = 999999, features = '["1000 produits", "15 utilisateurs", "Ventes illimitées", "Facture A4 personnalisée", "Logo personnalisé", "Statistiques avancées", "Catégories avancées", "Export complet", "1 boutique", "Support WhatsApp"]'::jsonb WHERE id = 'pro';
+UPDATE public.subscription_plans SET max_sales_monthly = 999999, features = '["Produits illimités", "Utilisateurs illimités", "Ventes illimitées", "Facture A4 personnalisée", "Logo personnalisé", "Toutes les statistiques", "Toutes les catégories", "Multi-boutiques", "Export complet", "Support dédié", "API access"]'::jsonb WHERE id = 'premium';

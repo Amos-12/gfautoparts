@@ -1,4 +1,5 @@
 import { useState, useRef, TouchEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { formatLocalizedDateTime } from '@/lib/locale';
 
 interface Sale {
   id: string;
@@ -42,16 +44,6 @@ const formatNumber = (amount: number): string => {
   return amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 };
 
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
-
 const formatCompactNumber = (amount: number): string => {
   if (amount >= 1000000) {
     return (amount / 1000000).toFixed(1) + 'M';
@@ -62,6 +54,7 @@ const formatCompactNumber = (amount: number): string => {
 };
 
 export const SaleCard = ({ sale, isAdmin, onView, onDelete, showSwipeHint = false }: SaleCardProps) => {
+  const { t } = useTranslation();
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const startX = useRef(0);
@@ -78,7 +71,6 @@ export const SaleCard = ({ sale, isAdmin, onView, onDelete, showSwipeHint = fals
     if (!isSwiping.current) return;
     currentX.current = e.touches[0].clientX;
     const diff = startX.current - currentX.current;
-    // Only allow left swipe (positive diff) up to 100px
     if (diff > 0 && diff <= 100) {
       setSwipeOffset(diff);
     } else if (diff <= 0) {
@@ -88,7 +80,6 @@ export const SaleCard = ({ sale, isAdmin, onView, onDelete, showSwipeHint = fals
 
   const handleTouchEnd = () => {
     isSwiping.current = false;
-    // If swiped more than 60px, keep it open, otherwise close
     if (swipeOffset > 60) {
       setSwipeOffset(80);
     } else {
@@ -103,9 +94,9 @@ export const SaleCard = ({ sale, isAdmin, onView, onDelete, showSwipeHint = fals
 
   const getPaymentMethodLabel = (method: string) => {
     switch (method) {
-      case 'cash': return 'Espèce';
-      case 'cheque': return 'Chèque';
-      case 'virement': return 'Virement';
+      case 'cash': return t('sales.cash');
+      case 'cheque': return t('sales.check');
+      case 'virement': return t('sales.transfer');
       default: return method;
     }
   };
@@ -113,7 +104,6 @@ export const SaleCard = ({ sale, isAdmin, onView, onDelete, showSwipeHint = fals
   return (
     <>
       <div className="relative overflow-hidden rounded-lg">
-        {/* Delete action background */}
         {isAdmin && (
           <div 
             className="absolute inset-y-0 right-0 w-20 bg-destructive flex items-center justify-center"
@@ -123,7 +113,6 @@ export const SaleCard = ({ sale, isAdmin, onView, onDelete, showSwipeHint = fals
           </div>
         )}
         
-        {/* Card content */}
         <Card 
           className="relative transition-transform duration-200 ease-out border-0 shadow-sm"
           style={{ transform: `translateX(-${swipeOffset}px)` }}
@@ -132,36 +121,30 @@ export const SaleCard = ({ sale, isAdmin, onView, onDelete, showSwipeHint = fals
           onTouchEnd={handleTouchEnd}
         >
           <CardContent className="p-3">
-            {/* Swipe hint for first card */}
             {showSwipeHint && isAdmin && swipeOffset === 0 && (
               <div className="absolute top-1/2 right-2 -translate-y-1/2 flex items-center gap-1 text-[10px] text-muted-foreground animate-pulse">
                 <ChevronLeft className="w-3 h-3" />
-                <span>Glisser</span>
+                <span>{t('common.swipe')}</span>
               </div>
             )}
             <div className="flex items-start justify-between gap-2">
-              {/* Left section - Main info */}
               <div className="flex-1 min-w-0 space-y-1.5">
-                {/* Customer & Date row */}
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Calendar className="w-3 h-3 shrink-0" />
-                  <span>{formatDate(sale.created_at)}</span>
+                  <span>{formatLocalizedDateTime(sale.created_at)}</span>
                 </div>
                 
-                {/* Customer name */}
                 <div className="flex items-center gap-2">
                   <User className="w-4 h-4 text-muted-foreground shrink-0" />
                   <span className="font-medium truncate text-sm">
-                    {sale.customer_name || <span className="text-muted-foreground italic">Client anonyme</span>}
+                    {sale.customer_name || <span className="text-muted-foreground italic">{t('sales.anonymousClient')}</span>}
                   </span>
                 </div>
 
-                {/* Seller */}
                 <p className="text-xs text-muted-foreground truncate pl-6">
-                  Vendeur: {sale.profiles?.full_name || 'N/A'}
+                  {t('common.seller')}: {sale.profiles?.full_name || 'N/A'}
                 </p>
 
-                {/* Payment method */}
                 <div className="flex items-center gap-2 pl-6">
                   <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                     <CreditCard className="w-2.5 h-2.5 mr-1" />
@@ -170,9 +153,7 @@ export const SaleCard = ({ sale, isAdmin, onView, onDelete, showSwipeHint = fals
                 </div>
               </div>
 
-              {/* Right section - Amount & Action */}
               <div className="flex flex-col items-end gap-2 shrink-0">
-                {/* Amount */}
                 <div className="text-right">
                   {sale.currencies?.htg ? (
                     <p className="font-bold text-sm text-foreground">
@@ -189,7 +170,6 @@ export const SaleCard = ({ sale, isAdmin, onView, onDelete, showSwipeHint = fals
                   )}
                 </div>
 
-                {/* View button */}
                 <Button 
                   size="sm" 
                   variant="ghost"
@@ -197,7 +177,7 @@ export const SaleCard = ({ sale, isAdmin, onView, onDelete, showSwipeHint = fals
                   onClick={() => onView(sale.id)}
                 >
                   <Eye className="w-3.5 h-3.5 mr-1" />
-                  <span className="text-xs">Détails</span>
+                  <span className="text-xs">{t('common.details')}</span>
                   <ChevronRight className="w-3 h-3 ml-0.5" />
                 </Button>
               </div>
@@ -206,23 +186,21 @@ export const SaleCard = ({ sale, isAdmin, onView, onDelete, showSwipeHint = fals
         </Card>
       </div>
 
-      {/* Delete confirmation dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent className="w-[90vw] max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+            <AlertDialogTitle>{t('sales.confirmDelete')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Êtes-vous sûr de vouloir supprimer cette vente ?
-              Cette action est irréversible et remettra les produits en stock.
+              {t('sales.confirmDeleteDesc')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction 
               onClick={() => onDelete(sale.id)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Supprimer
+              {t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

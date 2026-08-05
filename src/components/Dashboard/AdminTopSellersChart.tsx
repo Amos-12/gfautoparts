@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, Trophy, Medal, Award, TrendingUp } from 'lucide-react';
 import { formatNumber, formatCurrencyValue } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface SellerData {
   name: string;
@@ -16,6 +17,7 @@ interface AdminTopSellersChartProps {
 }
 
 export const AdminTopSellersChart = ({ sellers, maxRevenue, currency = 'HTG' }: AdminTopSellersChartProps) => {
+  const { t } = useTranslation();
   const max = maxRevenue || (sellers.length > 0 ? Math.max(...sellers.map(s => s.revenue)) : 1);
   const totalRevenue = sellers.reduce((sum, s) => sum + s.revenue, 0);
   
@@ -68,14 +70,14 @@ export const AdminTopSellersChart = ({ sellers, maxRevenue, currency = 'HTG' }: 
           <div className="p-1.5 sm:p-2 rounded-lg bg-gradient-to-br from-pink-500/20 to-rose-500/20">
             <Users className="h-4 w-4 sm:h-5 sm:w-5 text-pink-600 dark:text-pink-400" />
           </div>
-          Top 5 Vendeurs
+          {t('dashboard.topSellers')}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 sm:space-y-3 px-3 sm:px-6">
         {sellers.length === 0 ? (
           <div className="text-center py-6 sm:py-8 text-muted-foreground">
             <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 opacity-50" />
-            <p className="text-sm sm:text-base">Aucune donnée disponible</p>
+            <p className="text-sm sm:text-base">{t('common.noData')}</p>
           </div>
         ) : (
           sellers.map((seller, index) => {
@@ -123,7 +125,7 @@ export const AdminTopSellersChart = ({ sellers, maxRevenue, currency = 'HTG' }: 
                     <div className="flex justify-between mt-1 sm:mt-1.5 text-[10px] sm:text-xs">
                       <span className="text-muted-foreground flex items-center gap-0.5 sm:gap-1">
                         <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                        {seller.sales} vente{seller.sales > 1 ? 's' : ''}
+                        {seller.sales} {t('dashboard.salesCount', { count: seller.sales })}
                       </span>
                       <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrencyValue(seller.revenue, currency)}</span>
                     </div>

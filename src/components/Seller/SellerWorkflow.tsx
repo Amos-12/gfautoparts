@@ -319,12 +319,12 @@ export const SellerWorkflow = ({ onSaleComplete, initialCart, initialCustomerNam
   const fetchCompanySettings = async () => {
     try {
       const { data, error } = await supabase
-        .from('company_settings')
+        .from('companies')
         .select('*')
         .limit(1)
         .single();
       
-      if (data) setCompanySettings(data);
+      if (data) setCompanySettings({ ...data, company_name: data.name });
     } catch (error) {
       console.error('Error fetching company settings:', error);
     }
@@ -988,6 +988,42 @@ export const SellerWorkflow = ({ onSaleComplete, initialCart, initialCustomerNam
     setIsProcessing(true);
 
     try {
+      // === CHECK MONTHLY SALES LIMIT ===
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { count: monthlySalesCount, error: countError } = await supabase
+        .from('sales')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', startOfMonth.toISOString());
+
+      if (!countError && monthlySalesCount !== null) {
+        // Fetch plan limits
+        const { data: companyData } = await supabase
+          .from('companies')
+          .select('subscription_plan')
+          .limit(1)
+          .maybeSingle();
+
+        if (companyData?.subscription_plan) {
+          const { data: planData } = await supabase
+            .from('subscription_plans')
+            .select('max_sales_monthly')
+            .eq('id', companyData.subscription_plan)
+            .maybeSingle();
+
+          if (planData && monthlySalesCount >= planData.max_sales_monthly) {
+            toast({
+              title: "Limite de ventes mensuelles atteinte",
+              description: `Votre plan est limité à ${planData.max_sales_monthly} ventes par mois. Passez à un plan supérieur pour continuer.`,
+              variant: "destructive"
+            });
+            setIsProcessing(false);
+            return;
+          }
+        }
+      }
       // Use unified total (properly converted to display currency) for all calculations
       const { amount: unifiedSubtotal, currency: displayCurrency } = getUnifiedTotal();
       const discountAmount = getDiscountAmount();
@@ -1488,23 +1524,6 @@ export const SellerWorkflow = ({ onSaleComplete, initialCart, initialCustomerNam
                     ))}
                   </SelectContent>
                 </Select>
-
-                {(searchTerm !== '' || saleTypeFilter !== 'all' || categoryFilter !== 'all' || sousCategoryFilter !== 'all') && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setSearchTerm('');
-                      setSaleTypeFilter('all');
-                      setCategoryFilter('all');
-                      setSousCategoryFilter('all');
-                    }}
-                    className="h-8 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="w-3.5 h-3.5 mr-1" />
-                    Réinitialiser
-                  </Button>
-                )}
               </div>
               
               <div className="flex justify-between items-center px-1">
@@ -1577,12 +1596,6 @@ export const SellerWorkflow = ({ onSaleComplete, initialCart, initialCustomerNam
                       <div className="space-y-3">
                         <div>
                           <h4 className="font-semibold text-base">{product.name}</h4>
-                          {product.barcode && (
-                            <code className="inline-block mt-1 text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
-                              {product.barcode}
-                            </code>
-                          )}
-                          
                           
                           {/* Product specifications as horizontal colored badges */}
                           <div className="flex flex-wrap gap-1 mt-2">

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 import {
   Area,
   AreaChart,
@@ -23,6 +24,7 @@ interface SellerTrendChartProps {
 }
 
 const CustomTooltip = ({ active, payload, label, currency = 'HTG' }: any) => {
+  const { t } = useTranslation();
   if (active && payload && payload.length) {
     return (
       <div className="bg-card border border-border rounded-xl shadow-xl p-3">
@@ -30,14 +32,14 @@ const CustomTooltip = ({ active, payload, label, currency = 'HTG' }: any) => {
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500" />
-            <span className="text-xs text-muted-foreground">Revenu:</span>
+            <span className="text-xs text-muted-foreground">{t('sellerDashboard.tooltip_revenue')}</span>
             <span className="text-xs font-bold text-foreground">
               {currency === 'USD' ? `$${formatNumber(payload[0]?.value)}` : `${formatNumber(payload[0]?.value)} HTG`}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" />
-            <span className="text-xs text-muted-foreground">Ventes:</span>
+            <span className="text-xs text-muted-foreground">{t('sellerDashboard.tooltip_sales')}</span>
             <span className="text-xs font-bold text-foreground">{payload[1]?.value}</span>
           </div>
         </div>
@@ -48,6 +50,7 @@ const CustomTooltip = ({ active, payload, label, currency = 'HTG' }: any) => {
 };
 
 export const SellerTrendChart = ({ data, currency = 'HTG' }: SellerTrendChartProps) => {
+  const { t } = useTranslation();
   return (
     <Card className="seller-card-trend animate-fade-in-up" style={{ animationDelay: '50ms' }}>
       <CardHeader className="pb-2">
@@ -55,7 +58,7 @@ export const SellerTrendChart = ({ data, currency = 'HTG' }: SellerTrendChartPro
           <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/20">
             <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
-          Tendance des 7 derniers jours
+          {t('sellerDashboard.trend_title')}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -121,11 +124,11 @@ export const SellerTrendChart = ({ data, currency = 'HTG' }: SellerTrendChartPro
         <div className="flex items-center justify-center gap-6 mt-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 shadow-sm" />
-            <span>Revenu ({currency})</span>
+            <span>{t('sellerDashboard.legend_revenue', { currency })}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 shadow-sm" />
-            <span>Ventes</span>
+            <span>{t('sellerDashboard.legend_sales')}</span>
           </div>
         </div>
       </CardContent>

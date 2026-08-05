@@ -132,12 +132,12 @@ export const QuickInventoryMode = () => {
   useEffect(() => {
     const fetchCompanySettings = async () => {
       const { data } = await supabase
-        .from('company_settings')
+        .from('companies')
         .select('*')
         .limit(1)
         .maybeSingle();
       if (data) {
-        setCompanySettings(data as CompanySettings);
+        setCompanySettings({ ...data, company_name: data.name } as CompanySettings);
       }
     };
     fetchCompanySettings();
@@ -182,6 +182,7 @@ export const QuickInventoryMode = () => {
 
         // Log stock movement
         await supabase.from('stock_movements').insert({
+          company_id: profile?.company_id || '',
           product_id: op.productId,
           movement_type: 'inventory_adjustment',
           quantity: Math.abs(op.newValue - op.previousValue),
@@ -445,6 +446,7 @@ export const QuickInventoryMode = () => {
 
         // Log stock movement
         await supabase.from('stock_movements').insert({
+          company_id: profile?.company_id || '',
           product_id: currentProduct.id,
           movement_type: 'inventory_adjustment',
           quantity: Math.abs(newValue - previousValue),

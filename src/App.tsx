@@ -14,6 +14,8 @@ import SellerDashboard from "./pages/SellerDashboard";
 import InventoryPage from "./pages/InventoryPage";
 import HelpPage from "./pages/HelpPage";
 import Profile from "./pages/Profile";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
+import PaymentSuccess from "./pages/PaymentSuccess";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -62,6 +64,8 @@ const App = () => (
             <Route path="/seller" element={<SellerDashboard />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/help" element={<HelpPage />} />
+            <Route path="/super-admin" element={<SuperAdminDashboard />} />
+            <Route path="/payment-success" element={<PaymentSuccess />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/" element={<Index />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

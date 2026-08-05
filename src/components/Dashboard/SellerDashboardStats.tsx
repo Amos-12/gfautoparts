@@ -21,6 +21,9 @@ import { formatNumber } from '@/lib/utils';
 import { useSaleCalculations, SaleForCalc } from '@/hooks/useSaleCalculations';
 import { SaleItemForCalc } from '@/hooks/useCurrencyCalculations';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
+import { useTranslation } from 'react-i18next';
+import { getCurrentLocale, getDateFnsLocale } from '@/lib/locale';
+import { format as fmtDate } from 'date-fns';
 
 interface TrendDataPoint {
   date: string;
@@ -29,6 +32,7 @@ interface TrendDataPoint {
 }
 
 export const SellerDashboardStats = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const saleCalc = useSaleCalculations();
   
@@ -142,7 +146,7 @@ export const SellerDashboardStats = () => {
         const dayRevenue = saleCalc.calculateRevenueTTC(daySales as SaleForCalc[], allSaleItems);
         
         trendDataCalc.push({
-          date: date.toLocaleDateString('fr-FR', { weekday: 'short' }),
+          date: fmtDate(date, 'EEE', { locale: getDateFnsLocale() }),
           revenue: dayRevenue,
           sales: daySales.length
         });
@@ -283,7 +287,7 @@ export const SellerDashboardStats = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <Package className="w-8 h-8 text-primary animate-pulse" />
-        <span className="ml-2 text-muted-foreground">Chargement...</span>
+        <span className="ml-2 text-muted-foreground">{t('sellerDashboard.loading')}</span>
       </div>
     );
   }
@@ -295,7 +299,7 @@ export const SellerDashboardStats = () => {
         <div className="flex items-center gap-1.5 sm:gap-2">
           <Badge variant="outline" className="text-[10px] sm:text-xs px-1.5 sm:px-2">
             <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />
-            <span className="hidden sm:inline">MàJ:</span> {lastUpdate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+            <span className="hidden sm:inline">{t('sellerDashboard.updated_at')}</span> {lastUpdate.toLocaleTimeString(getCurrentLocale(), { hour: '2-digit', minute: '2-digit' })}
           </Badge>
           <Badge 
             variant="outline" 
@@ -316,14 +320,14 @@ export const SellerDashboardStats = () => {
           className="h-7 sm:h-8 text-xs sm:text-sm"
         >
           <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline">Actualiser</span>
+          <span className="hidden sm:inline">{t('sellerDashboard.refresh')}</span>
         </Button>
       </div>
 
       {/* KPI Cards with Sparklines */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <KPICard
-          title="Revenu Aujourd'hui"
+          title={t('sellerDashboard.kpi_revenue_today')}
           value={stats.todayRevenue}
           previousValue={stats.yesterdayRevenue}
           icon={DollarSign}
@@ -332,7 +336,7 @@ export const SellerDashboardStats = () => {
           currency={displayCurrency}
         />
         <KPICard
-          title="Ventes"
+          title={t('sellerDashboard.kpi_sales')}
           value={stats.todaySales}
           previousValue={stats.yesterdaySales}
           icon={Receipt}
@@ -341,7 +345,7 @@ export const SellerDashboardStats = () => {
           colorScheme="seller-sales"
         />
         <KPICard
-          title="Panier Moyen"
+          title={t('sellerDashboard.kpi_avg_basket')}
           value={stats.averageSale}
           icon={ShoppingCart}
           colorScheme="seller-average"
@@ -349,7 +353,7 @@ export const SellerDashboardStats = () => {
           currency={displayCurrency}
         />
         <KPICard
-          title="Total Ventes"
+          title={t('sellerDashboard.kpi_total_sales')}
           value={stats.totalSales}
           icon={TrendingUp}
           format="number"
@@ -375,17 +379,17 @@ export const SellerDashboardStats = () => {
         <SellerPerformanceComparison
           comparisons={[
             { 
-              label: "Aujourd'hui vs Hier", 
+              label: t('sellerDashboard.cmp_today_vs_yesterday'), 
               current: stats.todayRevenue, 
               previous: stats.yesterdayRevenue 
             },
             { 
-              label: "Cette Semaine", 
+              label: t('sellerDashboard.cmp_this_week'), 
               current: stats.weekRevenue, 
               previous: stats.lastWeekRevenue 
             },
             { 
-              label: "Ce Mois", 
+              label: t('sellerDashboard.cmp_this_month'), 
               current: stats.monthRevenue, 
               previous: stats.lastMonthRevenue 
             }
@@ -401,14 +405,14 @@ export const SellerDashboardStats = () => {
           <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6">
             <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
               <Package className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-              Top 5 Produits
+              {t('sellerDashboard.top_products')}
             </CardTitle>
           </CardHeader>
           <CardContent className="px-3 sm:px-6">
             {stats.topProducts.length === 0 ? (
               <div className="text-center py-6 sm:py-8 text-muted-foreground">
                 <Package className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 opacity-50" />
-                <p className="text-xs sm:text-base">Aucune vente enregistrée</p>
+                <p className="text-xs sm:text-base">{t('sellerDashboard.no_sales_recorded')}</p>
               </div>
             ) : (
               <>
@@ -432,7 +436,7 @@ export const SellerDashboardStats = () => {
                               <div className="bg-card border border-border rounded-lg shadow-lg p-2 sm:p-3 text-xs sm:text-sm">
                               <p className="font-medium">{data.fullName}</p>
                                 <p className="text-muted-foreground">
-                                  {displayCurrency === 'USD' ? `$${formatNumber(data.revenue)}` : `${formatNumber(data.revenue)} HTG`} • {data.quantity} unités
+                                  {displayCurrency === 'USD' ? `$${formatNumber(data.revenue)}` : `${formatNumber(data.revenue)} HTG`} • {data.quantity} {t('sellerDashboard.units')}
                                 </p>
                               </div>
                             );
@@ -480,14 +484,14 @@ export const SellerDashboardStats = () => {
           <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6">
             <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
               <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-              Ventes Récentes
+              {t('sellerDashboard.recent_sales')}
             </CardTitle>
           </CardHeader>
           <CardContent className="px-3 sm:px-6">
             {recentSales.length === 0 ? (
               <div className="text-center py-6 sm:py-8 text-muted-foreground">
                 <Receipt className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 opacity-50" />
-                <p className="text-xs sm:text-base">Aucune vente récente</p>
+                <p className="text-xs sm:text-base">{t('sellerDashboard.no_recent_sales')}</p>
               </div>
             ) : (
               <div className="space-y-2 sm:space-y-3">
@@ -495,10 +499,10 @@ export const SellerDashboardStats = () => {
                   <div key={sale.id} className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-muted/50 dark:bg-muted/20">
                     <div className="min-w-0">
                       <p className="font-medium truncate text-xs sm:text-sm">
-                        {sale.customer_name || 'Client anonyme'}
+                        {sale.customer_name || t('sales.anonymousClient')}
                       </p>
                       <p className="text-[10px] sm:text-xs text-muted-foreground">
-                        {new Date(sale.created_at).toLocaleDateString('fr-FR', { 
+                        {new Date(sale.created_at).toLocaleDateString(getCurrentLocale(), { 
                           day: 'numeric',
                           month: 'short',
                           hour: '2-digit',

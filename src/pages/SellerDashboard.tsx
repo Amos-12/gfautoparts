@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ResponsiveDashboardLayout } from '@/components/Layout/ResponsiveDashboardLayout';
 import { SellerWorkflow } from '@/components/Seller/SellerWorkflow';
@@ -8,6 +9,9 @@ import { StockAlerts } from '@/components/Notifications/StockAlerts';
 import { ProductManagement } from '@/components/Products/ProductManagement';
 import { SaleDetailsDialog } from '@/components/Sales/SaleDetailsDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useSubscription } from '@/hooks/useSubscription';
+import { ExpiredScreen } from '@/components/Subscription/ExpiredScreen';
+import { UpgradeBanner } from '@/components/Subscription/UpgradeBanner';
 import { 
   TrendingUp,
   Receipt,
@@ -18,6 +22,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSaleCalculations, SaleForCalc } from '@/hooks/useSaleCalculations';
 import { startOfDay, startOfWeek, startOfMonth } from 'date-fns';
+import { getCurrentLocale } from '@/lib/locale';
 import logo from '@/assets/logo.png';
 
 interface EnrichedSale {
@@ -60,8 +65,14 @@ interface ProformaCartItem {
 }
 
 const SellerDashboard = () => {
-  const { user, loading: authLoading, role } = useAuth();
+  const { t } = useTranslation();
+  const { user, loading: authLoading, role, signOut } = useAuth();
   const saleCalc = useSaleCalculations();
+  const { isExpired, plan, isFreePlan, companyName, loading: subLoading } = useSubscription();
+
+  if (!subLoading && isExpired) {
+    return <ExpiredScreen companyName={companyName} currentPlan={plan} onLogout={signOut} />;
+  }
   const [sales, setSales] = useState<EnrichedSale[]>([]);
   const [currentSection, setCurrentSection] = useState('dashboard');
   const [isApproved, setIsApproved] = useState<boolean | null>(null);
@@ -200,10 +211,10 @@ const SellerDashboard = () => {
         return <StockAlerts />;
       case 'history':
         const periodLabels: Record<string, string> = {
-          all: '20 récentes',
-          today: "Aujourd'hui",
-          week: 'Cette semaine',
-          month: 'Ce mois'
+          all: t('common.recent20'),
+          today: t('common.today'),
+          week: t('common.thisWeek'),
+          month: t('common.thisMonth')
         };
         
         // Calculate total for filtered period using displayAmount (properly calculated TTC)
@@ -215,9 +226,9 @@ const SellerDashboard = () => {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
                   <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
-                  Mes Ventes
+                  {t('sales.mySales')}
                   <span className="text-xs sm:text-sm font-normal text-muted-foreground ml-1">
-                    ({sales.length} ventes)
+                    ({t('sales.salesCount', { count: sales.length })})
                   </span>
                 </CardTitle>
                 <Select value={periodFilter} onValueChange={(v) => setPeriodFilter(v as typeof periodFilter)}>
@@ -226,10 +237,10 @@ const SellerDashboard = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">20 récentes</SelectItem>
-                    <SelectItem value="today">Aujourd'hui</SelectItem>
-                    <SelectItem value="week">Cette semaine</SelectItem>
-                    <SelectItem value="month">Ce mois</SelectItem>
+                    <SelectItem value="all">{t('common.recent20')}</SelectItem>
+                    <SelectItem value="today">{t('common.today')}</SelectItem>
+                    <SelectItem value="week">{t('common.thisWeek')}</SelectItem>
+                    <SelectItem value="month">{t('common.thisMonth')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -237,11 +248,11 @@ const SellerDashboard = () => {
               {/* Period stats */}
               {sales.length > 0 && (
                 <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                  <span>Total {periodLabels[periodFilter]}:</span>
+                  <span>{t('sales.totalPeriod', { period: periodLabels[periodFilter] })}:</span>
                   <span className="font-semibold text-foreground">
                     {displayCurrency === 'USD' 
-                      ? `$${periodTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
-                      : `${periodTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG`
+                      ? `$${periodTotal.toLocaleString(getCurrentLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+                      : `${periodTotal.toLocaleString(getCurrentLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG`
                     }
                   </span>
                 </div>
@@ -251,7 +262,7 @@ const SellerDashboard = () => {
               {sales.length === 0 ? (
                 <div className="text-center py-6 sm:py-8 text-muted-foreground">
                   <Receipt className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 opacity-50" />
-                  <p className="text-xs sm:text-sm">Aucune vente pour cette période</p>
+                  <p className="text-xs sm:text-sm">{t('sales.noSalesPeriod')}</p>
                 </div>
               ) : (
                 <div className="space-y-2 sm:space-y-3">
@@ -266,12 +277,12 @@ const SellerDashboard = () => {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-xs sm:text-sm truncate max-w-[140px] sm:max-w-none flex items-center gap-1">
-                          {sale.customer_name || 'Client anonyme'}
+                          {sale.customer_name || t('sales.anonymousClient')}
                           <Eye className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                         <div className="text-[10px] sm:text-xs text-muted-foreground flex items-center gap-1 sm:gap-2 flex-wrap">
                           <span>
-                            {new Date(sale.created_at).toLocaleString('fr-FR', {
+                            {new Date(sale.created_at).toLocaleString(getCurrentLocale(), {
                               day: '2-digit',
                               month: 'short',
                               hour: '2-digit',
@@ -280,15 +291,15 @@ const SellerDashboard = () => {
                           </span>
                           <span className="hidden sm:inline">•</span>
                           <span className="px-1.5 py-0.5 bg-muted rounded text-[9px] sm:text-xs capitalize">
-                            {sale.payment_method === 'espece' ? 'Espèces' : sale.payment_method === 'cheque' ? 'Chèque' : sale.payment_method === 'virement' ? 'Virement' : sale.payment_method || 'N/A'}
+                            {sale.payment_method === 'espece' ? t('sales.cash') : sale.payment_method === 'cheque' ? t('sales.check') : sale.payment_method === 'virement' ? t('sales.transfer') : sale.payment_method || 'N/A'}
                           </span>
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0 ml-2">
                         <div className="font-bold text-xs sm:text-sm text-success">
                           {displayCurrency === 'USD' 
-                            ? `$${sale.displayAmount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
-                            : `${sale.displayAmount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG`
+                            ? `$${sale.displayAmount.toLocaleString(getCurrentLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+                            : `${sale.displayAmount.toLocaleString(getCurrentLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG`
                           }
                         </div>
                       </div>
@@ -309,7 +320,7 @@ const SellerDashboard = () => {
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary-light via-background to-secondary">
         <div className="text-center">
           <img src={logo} alt="Logo" className="w-14 h-14 object-contain mx-auto mb-4 animate-pulse" />
-          <p className="text-muted-foreground">Chargement du tableau de bord...</p>
+          <p className="text-muted-foreground">{t('dashboard.loadingDashboard')}</p>
         </div>
       </div>
     );
@@ -319,7 +330,7 @@ const SellerDashboard = () => {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary-light via-background to-secondary">
         <div className="text-center">
-          <p className="text-muted-foreground">Veuillez vous connecter</p>
+          <p className="text-muted-foreground">{t('auth.pleaseLogin')}</p>
         </div>
       </div>
     );
@@ -333,12 +344,13 @@ const SellerDashboard = () => {
 
   return (
     <ResponsiveDashboardLayout 
-      title="Espace Vendeur" 
+      title={t('dashboard.sellerTitle')} 
       role="seller" 
       currentSection={currentSection} 
       onSectionChange={setCurrentSection}
     >
       <div className="space-y-6">
+        <UpgradeBanner />
         {renderContent()}
       </div>
 

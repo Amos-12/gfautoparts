@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Download, Calculator, RefreshCw } from 'lucide-react';
+import { FileText, Download, Calculator, RefreshCw, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { usePagination } from '@/hooks/usePagination';
@@ -13,6 +13,9 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { generateTvaReportPDF } from '@/lib/pdfGenerator';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { useCurrencyCalculations } from '@/hooks/useCurrencyCalculations';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useTranslation } from 'react-i18next';
+import { getCurrentLocale } from '@/lib/locale';
 
 interface TvaSaleData {
   id: string;
@@ -60,6 +63,8 @@ export const TvaReport = () => {
   // Use centralized hooks
   const { settings: companySettings } = useCompanySettings();
   const currencyCalc = useCurrencyCalculations();
+  const { plan, isFreePlan } = useSubscription();
+  const { t } = useTranslation();
 
   const { 
     paginatedItems, 
@@ -76,8 +81,8 @@ export const TvaReport = () => {
   const fetchTvaData = async () => {
     if (!companySettings || !currencyCalc) {
       toast({
-        title: "Erreur",
-        description: "Paramètres de l'entreprise non chargés",
+        title: t('common.error'),
+        description: t('reports.tva.settingsNotLoaded'),
         variant: "destructive"
       });
       return;
@@ -180,8 +185,8 @@ export const TvaReport = () => {
     } catch (error) {
       console.error('Error fetching TVA data:', error);
       toast({
-        title: "Erreur",
-        description: "Impossible de charger les données TVA",
+        title: t('common.error'),
+        description: t('reports.tva.loadError'),
         variant: "destructive"
       });
     } finally {
@@ -190,6 +195,7 @@ export const TvaReport = () => {
   };
 
   const handleExportPDF = () => {
+    if (isFreePlan) { toast({ title: t('reports.tva.premiumOnlyTitle'), description: t('reports.tva.premiumOnlyDesc'), variant: "destructive" }); return; }
     if (!companySettings) return;
     
     // Convert hook settings to pdfGenerator format
@@ -215,13 +221,13 @@ export const TvaReport = () => {
     );
     
     toast({
-      title: "Export réussi",
-      description: "Le rapport TVA a été téléchargé"
+      title: t('reports.tva.exportSuccessTitle'),
+      description: t('reports.tva.exportSuccessDesc')
     });
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
+    return new Date(dateString).toLocaleDateString(getCurrentLocale(), {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
@@ -229,7 +235,7 @@ export const TvaReport = () => {
   };
 
   const formatDateCompact = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
+    return new Date(dateString).toLocaleDateString(getCurrentLocale(), {
       day: '2-digit',
       month: '2-digit'
     });
@@ -265,7 +271,7 @@ export const TvaReport = () => {
         <CardHeader className="p-3 sm:p-6">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Calculator className="w-4 h-4 sm:w-5 sm:h-5" />
-            Rapport TVA Collectée
+            {t('reports.tva.title')}
             <Badge 
               variant="outline" 
               className={`ml-auto text-xs px-2 py-0.5 ${
@@ -281,7 +287,7 @@ export const TvaReport = () => {
         <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 items-end">
             <div className="space-y-1 sm:space-y-2">
-              <Label className="text-xs sm:text-sm">Date début</Label>
+              <Label className="text-xs sm:text-sm">{t('reports.tva.dateFrom')}</Label>
               <Input
                 type="date"
                 value={dateFrom}
@@ -290,7 +296,7 @@ export const TvaReport = () => {
               />
             </div>
             <div className="space-y-1 sm:space-y-2">
-              <Label className="text-xs sm:text-sm">Date fin</Label>
+              <Label className="text-xs sm:text-sm">{t('reports.tva.dateTo')}</Label>
               <Input
                 type="date"
                 value={dateTo}
@@ -300,12 +306,12 @@ export const TvaReport = () => {
             </div>
             <Button onClick={fetchTvaData} disabled={loading} className="h-8 sm:h-10 text-xs sm:text-sm">
               <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 sm:mr-2 ${loading ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Générer</span>
+              <span className="hidden sm:inline">{t('reports.tva.generate')}</span>
             </Button>
             {salesData.length > 0 && (
               <Button variant="outline" onClick={handleExportPDF} className="h-8 sm:h-10 text-xs sm:text-sm">
-                <Download className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
-                <span className="hidden sm:inline">Export PDF</span>
+                {isFreePlan ? <Lock className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" /> : <Download className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />}
+                <span className="hidden sm:inline">{t('reports.tva.exportPdf')}</span>
               </Button>
             )}
           </div>
@@ -317,7 +323,7 @@ export const TvaReport = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
           <Card className="border-l-4 border-l-blue-500">
             <CardContent className="p-3 sm:p-4">
-              <p className="text-xs sm:text-sm text-muted-foreground">Total HT</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">{t('reports.tva.totalHT')}</p>
               <p className="text-base sm:text-xl font-bold">
                 {displayCurrency === 'HTG' 
                   ? `${formatNumber(totals.unifiedTotalHT)} HTG`
@@ -336,7 +342,7 @@ export const TvaReport = () => {
 
           <Card className="border-l-4 border-l-orange-500">
             <CardContent className="p-3 sm:p-4">
-              <p className="text-xs sm:text-sm text-muted-foreground">TVA ({tvaRate}%)</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">{t('reports.tva.totalTVA', { rate: tvaRate })}</p>
               <p className="text-base sm:text-xl font-bold text-orange-600 dark:text-orange-400">
                 {displayCurrency === 'HTG' 
                   ? `${formatNumber(totals.unifiedTotalTVA)} HTG`
@@ -355,7 +361,7 @@ export const TvaReport = () => {
 
           <Card className="border-l-4 border-l-green-500">
             <CardContent className="p-3 sm:p-4">
-              <p className="text-xs sm:text-sm text-muted-foreground">Total TTC</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">{t('reports.tva.totalTTC')}</p>
               <p className="text-base sm:text-xl font-bold text-green-600 dark:text-green-400">
                 {displayCurrency === 'HTG' 
                   ? `${formatNumber(totals.unifiedTotalTTC)} HTG`
@@ -380,7 +386,7 @@ export const TvaReport = () => {
           <CardHeader className="p-3 sm:p-6">
             <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
               <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
-              Détail ({totalItems} ventes)
+              {t('reports.tva.detailTitle', { count: totalItems })}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-2 sm:p-6 pt-0 sm:pt-0">
@@ -388,13 +394,13 @@ export const TvaReport = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs sm:text-sm">Date</TableHead>
-                    <TableHead className="text-xs sm:text-sm hidden sm:table-cell">N° Vente</TableHead>
-                    <TableHead className="text-xs sm:text-sm">Client</TableHead>
-                    <TableHead className="text-right text-xs sm:text-sm">HT</TableHead>
-                    <TableHead className="text-center text-xs sm:text-sm hidden sm:table-cell">TVA</TableHead>
-                    <TableHead className="text-right text-xs sm:text-sm">TVA</TableHead>
-                    <TableHead className="text-right text-xs sm:text-sm">TTC</TableHead>
+                    <TableHead className="text-xs sm:text-sm">{t('reports.tva.colDate')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm hidden sm:table-cell">{t('reports.tva.colSaleNumber')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm">{t('reports.tva.colCustomer')}</TableHead>
+                    <TableHead className="text-right text-xs sm:text-sm">{t('reports.tva.colHT')}</TableHead>
+                    <TableHead className="text-center text-xs sm:text-sm hidden sm:table-cell">{t('reports.tva.colTVA')}</TableHead>
+                    <TableHead className="text-right text-xs sm:text-sm">{t('reports.tva.colTVA')}</TableHead>
+                    <TableHead className="text-right text-xs sm:text-sm">{t('reports.tva.colTTC')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -457,7 +463,7 @@ export const TvaReport = () => {
         <Card>
           <CardContent className="p-6 sm:p-8 text-center text-muted-foreground">
             <Calculator className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 opacity-50" />
-            <p className="text-sm sm:text-base">Sélectionnez une période et cliquez sur "Générer" pour voir le rapport TVA</p>
+            <p className="text-sm sm:text-base">{t('reports.tva.emptyState')}</p>
           </CardContent>
         </Card>
       )}

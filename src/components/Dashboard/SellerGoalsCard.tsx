@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Trophy, Target, TrendingUp, Flame } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface SellerGoalsCardProps {
   todaySales: number;
@@ -17,6 +18,7 @@ export const SellerGoalsCard = ({
   averageDailyRevenue,
   currency = 'HTG',
 }: SellerGoalsCardProps) => {
+  const { t } = useTranslation();
   // Goals based on average + 20% stretch target
   const salesGoal = Math.max(Math.ceil(averageDailySales * 1.2), 1);
   const revenueGoal = Math.max(averageDailyRevenue * 1.2, 1000);
@@ -34,14 +36,14 @@ export const SellerGoalsCard = ({
           <div className="p-2 rounded-lg bg-gradient-to-br from-rose-500/20 to-pink-500/20">
             <Target className="w-5 h-5 text-rose-600 dark:text-rose-400" />
           </div>
-          Objectifs du Jour
+          {t('sellerDashboard.goals_title')}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
         {/* Sales Goal */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-muted-foreground">Ventes</span>
+            <span className="text-sm font-medium text-muted-foreground">{t('sellerDashboard.goal_sales')}</span>
             <div className="flex items-center gap-2">
               {salesAchieved && (
                 <Trophy className="w-4 h-4 text-amber-500 animate-pulse drop-shadow-md" />
@@ -67,8 +69,8 @@ export const SellerGoalsCard = ({
           </div>
           <p className="text-xs text-muted-foreground">
             {salesAchieved 
-              ? '🎉 Objectif atteint !' 
-              : `${salesGoal - todaySales} vente${salesGoal - todaySales > 1 ? 's' : ''} restante${salesGoal - todaySales > 1 ? 's' : ''}`
+              ? t('sellerDashboard.goal_achieved')
+              : t('sellerDashboard.goal_remaining_sales', { count: salesGoal - todaySales })
             }
           </p>
         </div>
@@ -76,7 +78,7 @@ export const SellerGoalsCard = ({
         {/* Revenue Goal */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-muted-foreground">Revenu</span>
+            <span className="text-sm font-medium text-muted-foreground">{t('sellerDashboard.goal_revenue')}</span>
             <div className="flex items-center gap-2">
               {revenueAchieved && (
                 <Trophy className="w-4 h-4 text-amber-500 animate-pulse drop-shadow-md" />
@@ -102,10 +104,10 @@ export const SellerGoalsCard = ({
           </div>
           <p className="text-xs text-muted-foreground">
             {revenueAchieved 
-              ? '🎉 Objectif atteint !' 
+              ? t('sellerDashboard.goal_achieved')
               : currency === 'USD' 
-                ? `$${formatNumber(revenueGoal - todayRevenue)} restants`
-                : `${formatNumber(revenueGoal - todayRevenue)} HTG restants`
+                ? t('sellerDashboard.goal_remaining_usd', { amount: formatNumber(revenueGoal - todayRevenue) })
+                : t('sellerDashboard.goal_remaining_htg', { amount: formatNumber(revenueGoal - todayRevenue) })
             }
           </p>
         </div>
@@ -114,7 +116,7 @@ export const SellerGoalsCard = ({
         <div className="pt-2 border-t border-border/50">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <TrendingUp className="w-3 h-3" />
-            <span>Objectifs basés sur votre moyenne +20%</span>
+            <span>{t('sellerDashboard.goal_basis')}</span>
           </div>
         </div>
       </CardContent>

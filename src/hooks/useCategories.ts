@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface Category {
@@ -67,7 +67,7 @@ export const useCategories = () => {
 
     // Setup realtime subscription
     const channel = supabase
-      .channel(`categories-changes-${Math.random().toString(36).slice(2)}`)
+      .channel('categories-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
         fetchCategories();
       })
@@ -125,7 +125,7 @@ export const useSousCategories = (categorieId?: string) => {
 
     // Setup realtime subscription
     const channel = supabase
-      .channel(`sous-categories-changes-${Math.random().toString(36).slice(2)}`)
+      .channel('sous-categories-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sous_categories' }, () => {
         fetchSousCategories();
       })

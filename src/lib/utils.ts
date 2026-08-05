@@ -1,12 +1,13 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { formatLocalizedNumber } from "@/lib/locale";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 export function formatNumber(value: number, decimals = 2): string {
-  return value.toLocaleString('fr-FR', {
+  return formatLocalizedNumber(value, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals
   });

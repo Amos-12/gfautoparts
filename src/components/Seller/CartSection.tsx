@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -99,21 +100,9 @@ const getCategoryColor = (category: string) => {
   return colors[category] || 'bg-muted text-muted-foreground';
 };
 
-const getCategoryLabel = (category: string) => {
-  const labels: Record<string, string> = {
-    ceramique: 'Céramique',
-    fer: 'Fer',
-    energie: 'Énergie',
-    blocs: 'Blocs',
-    vetements: 'Vêtements',
-    electronique: 'Électronique',
-    electromenager: 'Électroménager',
-    boissons: 'Boissons',
-    alimentaires: 'Alimentaire',
-    gazeuses: 'Gazeuses',
-    autres: 'Autres',
-  };
-  return labels[category] || category;
+const useCategoryLabel = () => {
+  const { t } = useTranslation();
+  return (category: string) => t(`seller.cartSection.categories.${category}`, category);
 };
 
 const getCartItemSpecs = (item: CartItem): string[] => {
@@ -143,6 +132,8 @@ export const CartSection: React.FC<CartSectionProps> = ({
   barresToTonnage,
   companySettings,
 }) => {
+  const { t } = useTranslation();
+  const getCategoryLabel = useCategoryLabel();
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   const totalItems = cart.reduce((sum, item) => sum + item.cartQuantity, 0);
@@ -161,11 +152,11 @@ export const CartSection: React.FC<CartSectionProps> = ({
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted/50 flex items-center justify-center">
             <ShoppingCart className="w-8 h-8 text-muted-foreground/50" />
           </div>
-          <h3 className="text-lg font-semibold mb-2">Panier vide</h3>
-          <p className="text-muted-foreground text-sm mb-4">Ajoutez des produits pour commencer</p>
+          <h3 className="text-lg font-semibold mb-2">{t('seller.cartSection.empty')}</h3>
+          <p className="text-muted-foreground text-sm mb-4">{t('seller.cartSection.emptyHint')}</p>
           <Button onClick={onContinueShopping} variant="default" size="sm" className="gap-2">
             <ArrowLeft className="w-4 h-4" />
-            Parcourir les produits
+            {t('seller.cartSection.browseProducts')}
           </Button>
         </CardContent>
       </Card>
@@ -179,9 +170,9 @@ export const CartSection: React.FC<CartSectionProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ShoppingCart className="w-5 h-5 text-primary" />
-            <CardTitle className="text-base">Panier</CardTitle>
+            <CardTitle className="text-base">{t('seller.cartSection.title')}</CardTitle>
             <Badge variant="secondary" className="text-xs">{distinctProducts}</Badge>
-            <Badge variant="outline" className="text-xs">{Math.round(totalItems)} u.</Badge>
+            <Badge variant="outline" className="text-xs">{Math.round(totalItems)} {t('seller.cartSection.unitsShort')}</Badge>
           </div>
           <div className="flex items-center gap-3">
             <span className="font-bold text-success text-sm">{formatAmount(unifiedTotal, displayCurrency)}</span>
@@ -193,15 +184,15 @@ export const CartSection: React.FC<CartSectionProps> = ({
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Vider le panier ?</AlertDialogTitle>
+                  <AlertDialogTitle>{t('seller.cartSection.clearTitle')}</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Supprimer tous les {distinctProducts} produit{distinctProducts > 1 ? 's' : ''} du panier ?
+                    {t('seller.cartSection.clearDesc', { count: distinctProducts })}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                  <AlertDialogCancel>{t('seller.cartSection.cancel')}</AlertDialogCancel>
                   <AlertDialogAction onClick={onClearCart} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Vider
+                    {t('seller.cartSection.clear')}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -334,10 +325,10 @@ export const CartSection: React.FC<CartSectionProps> = ({
       <div className="border-t p-3 flex gap-3 shrink-0 bg-background">
         <Button variant="outline" className="flex-1 gap-2" onClick={onContinueShopping}>
           <ArrowLeft className="w-4 h-4" />
-          Continuer
+          {t('seller.cartSection.continue')}
         </Button>
         <Button className="flex-1 gap-2" onClick={onCheckout}>
-          Finaliser
+          {t('seller.cartSection.checkout')}
           <ArrowRight className="w-4 h-4" />
         </Button>
       </div>

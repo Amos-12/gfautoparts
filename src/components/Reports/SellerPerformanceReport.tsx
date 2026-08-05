@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -17,11 +18,14 @@ import {
   ChevronUp,
   Download,
   RefreshCw,
-  Package
+  Package,
+  Lock
 } from 'lucide-react';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { getDateFnsLocale, getCurrentLocale } from '@/lib/locale';
 import * as XLSX from 'xlsx';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useTranslation } from 'react-i18next';
 
 interface SellerStats {
   seller_id: string;
@@ -47,12 +51,15 @@ export const SellerPerformanceReport = () => {
   const [period, setPeriod] = useState('30');
   const [expandedSeller, setExpandedSeller] = useState<string | null>(null);
   const [companySettings, setCompanySettings] = useState<CompanySettings>({ usd_htg_rate: 132, default_display_currency: 'HTG' });
+  const { plan, isFreePlan } = useSubscription();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const fetchSettings = async () => {
       const { data } = await supabase
-        .from('company_settings')
+        .from('companies')
         .select('usd_htg_rate, default_display_currency')
+        .limit(1)
         .single();
       if (data) {
         setCompanySettings({
@@ -226,15 +233,16 @@ export const SellerPerformanceReport = () => {
   const displayCurrency = companySettings.default_display_currency as 'USD' | 'HTG';
 
   const exportToExcel = () => {
+    if (isFreePlan) { toast({ title: t('reports.tva.premiumOnlyTitle'), description: t('reports.tva.premiumOnlyDesc'), variant: "destructive" }); return; }
     const data = sellers.map((s, index) => ({
-      'Rang': index + 1,
-      'Vendeur': s.seller_name,
+      [t('common.rank') || 'Rang']: index + 1,
+      [t('reports.seller.colProduct') === 'Produit' ? 'Vendeur' : t('users.title')]: s.seller_name,
       'Ventes USD': s.total_revenue_usd,
       'Ventes HTG': s.total_revenue_htg,
       [`Total (${displayCurrency})`]: s.total_revenue_converted,
-      'Nombre de ventes': s.total_sales,
-      'Panier moyen': s.average_cart,
-      'Bénéfice': s.total_profit,
+      [t('reports.seller.totalSales')]: s.total_sales,
+      [t('reports.seller.avgCart')]: s.average_cart,
+      [t('reports.seller.profit')]: s.total_profit,
       'Tendance (%)': s.trend_percent.toFixed(1)
     }));
 
@@ -245,7 +253,7 @@ export const SellerPerformanceReport = () => {
   };
 
   const formatCurrency = (amount: number, currency: 'USD' | 'HTG' = 'HTG') => {
-    const formatted = new Intl.NumberFormat('fr-FR', { 
+    const formatted = new Intl.NumberFormat(getCurrentLocale(), { 
       minimumFractionDigits: 0,
       maximumFractionDigits: 0 
     }).format(amount);
@@ -264,8 +272,8 @@ export const SellerPerformanceReport = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="flex items-center gap-2">
           <div>
-            <h2 className="text-lg sm:text-2xl font-bold text-foreground">Performance des Vendeurs</h2>
-            <p className="text-xs sm:text-sm text-muted-foreground">Analyse des ventes par vendeur</p>
+            <h2 className="text-lg sm:text-2xl font-bold text-foreground">{t('reports.seller.title')}</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground">{t('reports.seller.subtitle')}</p>
           </div>
           <Badge 
             variant="outline" 
@@ -284,19 +292,19 @@ export const SellerPerformanceReport = () => {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="1">Aujourd'hui</SelectItem>
-              <SelectItem value="7">7 jours</SelectItem>
-              <SelectItem value="30">30 jours</SelectItem>
-              <SelectItem value="90">3 mois</SelectItem>
-              <SelectItem value="365">1 an</SelectItem>
+              <SelectItem value="1">{t('reports.seller.today')}</SelectItem>
+              <SelectItem value="7">{t('reports.seller.days7')}</SelectItem>
+              <SelectItem value="30">{t('reports.seller.days30')}</SelectItem>
+              <SelectItem value="90">{t('reports.seller.months3')}</SelectItem>
+              <SelectItem value="365">{t('reports.seller.year1')}</SelectItem>
             </SelectContent>
           </Select>
           <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9" onClick={fetchSellerStats} disabled={loading}>
             <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
           <Button variant="outline" size="sm" className="h-8 sm:h-9 text-xs sm:text-sm" onClick={exportToExcel} disabled={sellers.length === 0}>
-            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-2" />
-            <span className="hidden sm:inline">Export</span>
+            {isFreePlan ? <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-2" /> : <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-2" />}
+            <span className="hidden sm:inline">{t('reports.seller.export')}</span>
           </Button>
         </div>
       </div>
@@ -307,7 +315,7 @@ export const SellerPerformanceReport = () => {
           <CardContent className="p-3 sm:pt-6 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] sm:text-sm text-muted-foreground">Ventes USD</p>
+                <p className="text-[10px] sm:text-sm text-muted-foreground">{t('reports.seller.salesUSD')}</p>
                 <p className="text-sm sm:text-lg font-bold">{formatCurrency(totalRevenueUSD, 'USD')}</p>
               </div>
               <div className="p-2 sm:p-3 bg-green-500/10 rounded-full">
@@ -321,7 +329,7 @@ export const SellerPerformanceReport = () => {
           <CardContent className="p-3 sm:pt-6 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] sm:text-sm text-muted-foreground">Ventes HTG</p>
+                <p className="text-[10px] sm:text-sm text-muted-foreground">{t('reports.seller.salesHTG')}</p>
                 <p className="text-sm sm:text-lg font-bold">{formatCurrency(totalRevenueHTG, 'HTG')}</p>
               </div>
               <div className="p-2 sm:p-3 bg-primary/10 rounded-full">
@@ -335,7 +343,7 @@ export const SellerPerformanceReport = () => {
           <CardContent className="p-3 sm:pt-6 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] sm:text-sm text-muted-foreground">Total ({displayCurrency})</p>
+                <p className="text-[10px] sm:text-sm text-muted-foreground">{t('reports.seller.totalConverted', { currency: displayCurrency })}</p>
                 <p className="text-sm sm:text-lg font-bold text-primary">{formatCurrency(totalRevenueConverted, displayCurrency)}</p>
               </div>
               <div className="p-2 sm:p-3 bg-primary/10 rounded-full">
@@ -349,7 +357,7 @@ export const SellerPerformanceReport = () => {
           <CardContent className="p-3 sm:pt-6 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] sm:text-sm text-muted-foreground">Ventes totales</p>
+                <p className="text-[10px] sm:text-sm text-muted-foreground">{t('reports.seller.totalSales')}</p>
                 <p className="text-sm sm:text-lg font-bold">{totalSales}</p>
               </div>
               <div className="p-2 sm:p-3 bg-blue-500/10 rounded-full">
@@ -363,7 +371,7 @@ export const SellerPerformanceReport = () => {
           <CardContent className="p-3 sm:pt-6 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] sm:text-sm text-muted-foreground">Vendeurs actifs</p>
+                <p className="text-[10px] sm:text-sm text-muted-foreground">{t('reports.seller.activeSellers')}</p>
                 <p className="text-sm sm:text-lg font-bold">{sellers.length}</p>
               </div>
               <div className="p-2 sm:p-3 bg-purple-500/10 rounded-full">
@@ -379,7 +387,7 @@ export const SellerPerformanceReport = () => {
         <CardHeader className="p-4 sm:p-6">
           <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
             <Award className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500" />
-            Classement des Vendeurs
+            {t('reports.seller.ranking')}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-2 sm:p-6 pt-0">
@@ -389,7 +397,7 @@ export const SellerPerformanceReport = () => {
             </div>
           ) : sellers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
-              Aucune vente trouvée pour cette période
+              {t('reports.seller.noSales')}
             </div>
           ) : (
             <div className="space-y-1.5 sm:space-y-2">
@@ -413,7 +421,7 @@ export const SellerPerformanceReport = () => {
                           </div>
                           <div>
                             <p className="font-medium text-xs sm:text-sm">{seller.seller_name}</p>
-                            <p className="text-[10px] sm:text-sm text-muted-foreground">{seller.total_sales} ventes</p>
+                            <p className="text-[10px] sm:text-sm text-muted-foreground">{seller.total_sales} {t('reports.seller.sales')}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 sm:gap-4">
@@ -427,11 +435,11 @@ export const SellerPerformanceReport = () => {
                           </div>
                           <div className="text-right hidden md:block">
                             <p className="font-semibold">{formatCurrency(seller.total_revenue_converted, displayCurrency)}</p>
-                            <p className="text-xs text-muted-foreground">Total converti</p>
+                            <p className="text-xs text-muted-foreground">{t('reports.seller.totalConvertedLabel')}</p>
                           </div>
                           <div className="text-right hidden lg:block">
                             <p className="font-semibold">{formatCurrency(seller.total_profit, displayCurrency)}</p>
-                            <p className="text-xs text-muted-foreground">Bénéfice</p>
+                            <p className="text-xs text-muted-foreground">{t('reports.seller.profit')}</p>
                           </div>
                           <Badge variant={seller.trend_percent >= 0 ? 'default' : 'destructive'} className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2">
                             {seller.trend_percent >= 0 ? (
@@ -461,27 +469,27 @@ export const SellerPerformanceReport = () => {
                             <p className="text-xs sm:text-base font-semibold text-blue-600">{formatCurrency(seller.total_revenue_htg, 'HTG')}</p>
                           </div>
                           <div>
-                            <p className="text-[10px] sm:text-sm text-muted-foreground">Total converti ({displayCurrency})</p>
+                            <p className="text-[10px] sm:text-sm text-muted-foreground">{t('reports.seller.totalConvertedLabel')} ({displayCurrency})</p>
                             <p className="text-xs sm:text-base font-semibold">{formatCurrency(seller.total_revenue_converted, displayCurrency)}</p>
                           </div>
                           <div>
-                            <p className="text-[10px] sm:text-sm text-muted-foreground">Panier moy.</p>
+                            <p className="text-[10px] sm:text-sm text-muted-foreground">{t('reports.seller.avgCart')}</p>
                             <p className="text-xs sm:text-base font-semibold">{formatCurrency(seller.average_cart, displayCurrency)}</p>
                           </div>
                         </div>
-                        <p className="text-[10px] sm:text-xs text-muted-foreground mb-2">Taux: 1 USD = {companySettings.usd_htg_rate} HTG</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground mb-2">{t('reports.seller.rate')}: 1 USD = {companySettings.usd_htg_rate} HTG</p>
                         <h4 className="font-medium mb-2 flex items-center gap-2 text-xs sm:text-sm">
                           <Package className="w-3 h-3 sm:w-4 sm:h-4" />
-                          Top 5 Produits
+                          {t('reports.seller.top5Products')}
                         </h4>
                         {seller.top_products.length > 0 ? (
                           <div className="overflow-x-auto">
                             <Table>
                               <TableHeader>
                                 <TableRow>
-                                  <TableHead className="text-xs sm:text-sm">Produit</TableHead>
-                                  <TableHead className="text-right text-xs sm:text-sm">Qté</TableHead>
-                                  <TableHead className="text-right text-xs sm:text-sm">Revenu</TableHead>
+                                  <TableHead className="text-xs sm:text-sm">{t('reports.seller.colProduct')}</TableHead>
+                                  <TableHead className="text-right text-xs sm:text-sm">{t('reports.seller.colQty')}</TableHead>
+                                  <TableHead className="text-right text-xs sm:text-sm">{t('reports.seller.colRevenue')}</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -496,7 +504,7 @@ export const SellerPerformanceReport = () => {
                             </Table>
                           </div>
                         ) : (
-                          <p className="text-muted-foreground text-xs sm:text-sm">Aucun produit vendu</p>
+                          <p className="text-muted-foreground text-xs sm:text-sm">{t('reports.seller.noProductsSold')}</p>
                         )}
                       </div>
                     </CollapsibleContent>

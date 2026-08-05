@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +12,7 @@ import {
   User, Mail, Phone, Save, Lock, ArrowLeft, Shield, 
   Calendar, Clock, CheckCircle2, AlertCircle, Camera, 
   Activity, Package, ShoppingCart, Settings, LogIn, LogOut,
-  Trash2, Edit, Plus
+  Trash2, Edit, Plus, Globe
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -19,6 +20,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { LanguageSelector } from '@/components/ui/language-selector';
 
 interface ActivityLog {
   id: string;
@@ -29,6 +31,7 @@ interface ActivityLog {
 }
 
 const Profile = () => {
+  const { t } = useTranslation();
   const { user, profile, role, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -123,8 +126,8 @@ const Profile = () => {
     // Validate file type
     if (!file.type.startsWith('image/')) {
       toast({
-        title: "Type de fichier invalide",
-        description: "Veuillez sélectionner une image",
+        title: t('profile.invalidFileType'),
+        description: t('profile.selectImage'),
         variant: "destructive"
       });
       return;
@@ -133,8 +136,8 @@ const Profile = () => {
     // Validate file size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
       toast({
-        title: "Fichier trop volumineux",
-        description: "L'image ne doit pas dépasser 2 Mo",
+        title: t('profile.fileTooLarge'),
+        description: t('profile.maxFileSize'),
         variant: "destructive"
       });
       return;
@@ -170,14 +173,14 @@ const Profile = () => {
 
       setAvatarUrl(urlWithCacheBuster);
       toast({
-        title: "Photo mise à jour",
-        description: "Votre photo de profil a été modifiée avec succès"
+        title: t('profile.photoUpdated'),
+        description: t('profile.photoUpdatedDesc')
       });
     } catch (error) {
       console.error('Error uploading avatar:', error);
       toast({
-        title: "Erreur",
-        description: "Impossible de mettre à jour la photo",
+        title: t('common.error'),
+        description: t('profile.photoError'),
         variant: "destructive"
       });
     } finally {
@@ -203,14 +206,14 @@ const Profile = () => {
       if (error) throw error;
 
       toast({
-        title: "Profil mis à jour",
-        description: "Vos informations ont été modifiées avec succès"
+        title: t('profile.profileUpdated'),
+        description: t('profile.profileUpdatedDesc')
       });
     } catch (error) {
       console.error('Error updating profile:', error);
       toast({
-        title: "Erreur",
-        description: "Impossible de mettre à jour le profil",
+        title: t('common.error'),
+        description: t('profile.updateError'),
         variant: "destructive"
       });
     } finally {
@@ -222,16 +225,16 @@ const Profile = () => {
     if (!user) return;
     if (!passwordData.newPassword || passwordData.newPassword.length < 6) {
       toast({
-        title: 'Mot de passe trop court',
-        description: 'Minimum 6 caractères',
+        title: t('profile.passwordTooShort'),
+        description: t('profile.minSixChars'),
         variant: 'destructive'
       });
       return;
     }
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       toast({
-        title: 'Confirmation invalide',
-        description: 'Les mots de passe ne correspondent pas',
+        title: t('profile.passwordMismatch'),
+        description: t('profile.passwordsMismatchDesc'),
         variant: 'destructive'
       });
       return;
@@ -251,16 +254,16 @@ const Profile = () => {
       });
 
       toast({
-        title: 'Mot de passe mis à jour',
-        description: 'Votre mot de passe a été modifié avec succès'
+        title: t('profile.passwordUpdated'),
+        description: t('profile.passwordUpdatedDesc')
       });
       setPasswordData({ newPassword: '', confirmPassword: '' });
       fetchActivityHistory();
     } catch (error) {
       console.error('Error updating password:', error);
       toast({
-        title: 'Erreur',
-        description: "Impossible de mettre à jour le mot de passe",
+        title: t('common.error'),
+        description: t('profile.updateError'),
         variant: 'destructive'
       });
     } finally {
@@ -350,7 +353,7 @@ const Profile = () => {
           <Button variant="ghost" size="icon" onClick={handleBack}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-xl sm:text-2xl font-bold">Mon Profil</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">{t('profile.title')}</h1>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -383,12 +386,12 @@ const Profile = () => {
                   />
                 </div>
                 {uploadingAvatar && (
-                  <p className="text-xs text-muted-foreground">Téléchargement...</p>
+                  <p className="text-xs text-muted-foreground">{t('profile.uploading')}</p>
                 )}
                 
                 <div className="space-y-1">
                   <h2 className="text-lg sm:text-xl font-semibold">
-                    {formData.full_name || 'Utilisateur'}
+                    {formData.full_name || t('profile.user')}
                   </h2>
                   <p className="text-sm text-muted-foreground">{user?.email}</p>
                 </div>
@@ -398,7 +401,7 @@ const Profile = () => {
                   className="gap-1"
                 >
                   <Shield className="h-3 w-3" />
-                  {role === 'admin' ? 'Administrateur' : 'Vendeur'}
+                  {role === 'admin' ? t('roles.admin') : t('roles.seller')}
                 </Badge>
 
                 <Separator className="my-4" />
@@ -408,7 +411,7 @@ const Profile = () => {
                   <div className="flex items-center gap-3 text-sm">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <div>
-                      <p className="text-muted-foreground">Membre depuis</p>
+                      <p className="text-muted-foreground">{t('profile.memberSince')}</p>
                       <p className="font-medium">{memberSince || '—'}</p>
                     </div>
                   </div>
@@ -416,7 +419,7 @@ const Profile = () => {
                   <div className="flex items-center gap-3 text-sm">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <div>
-                      <p className="text-muted-foreground">Dernière activité</p>
+                      <p className="text-muted-foreground">{t('profile.lastActivity')}</p>
                       <p className="font-medium">{lastActivityFormatted || '—'}</p>
                     </div>
                   </div>
@@ -424,8 +427,8 @@ const Profile = () => {
                   <div className="flex items-center gap-3 text-sm">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
                     <div>
-                      <p className="text-muted-foreground">Statut du compte</p>
-                      <p className="font-medium text-green-600">Actif</p>
+                      <p className="text-muted-foreground">{t('profile.accountStatus')}</p>
+                      <p className="font-medium text-green-600">{t('common.active')}</p>
                     </div>
                   </div>
                 </div>
@@ -440,10 +443,10 @@ const Profile = () => {
               <CardHeader className="pb-4">
                 <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                   <User className="h-4 w-4 sm:h-5 sm:w-5" />
-                  Informations personnelles
+                  {t('profile.personalInfo')}
                 </CardTitle>
                 <CardDescription>
-                  Modifiez vos informations de profil
+                  {t('profile.editInfo')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -451,7 +454,7 @@ const Profile = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="email" className="text-sm">
-                        Email
+                        {t('common.email')}
                       </Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -464,13 +467,13 @@ const Profile = () => {
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        L'email ne peut pas être modifié
+                        {t('profile.emailCantChange')}
                       </p>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="full_name" className="text-sm">
-                        Nom Complet
+                        {t('profile.fullName')}
                       </Label>
                       <div className="relative">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -479,7 +482,7 @@ const Profile = () => {
                           type="text"
                           value={formData.full_name}
                           onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                          placeholder="Votre nom complet"
+                          placeholder={t('profile.fullNamePlaceholder')}
                           className="pl-10"
                           required
                         />
@@ -489,7 +492,7 @@ const Profile = () => {
 
                   <div className="space-y-2">
                     <Label htmlFor="phone" className="text-sm">
-                      Téléphone
+                      {t('common.phone')}
                     </Label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -498,7 +501,7 @@ const Profile = () => {
                         type="tel"
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        placeholder="Votre numéro de téléphone"
+                        placeholder={t('profile.phonePlaceholder')}
                         className="pl-10"
                       />
                     </div>
@@ -507,7 +510,7 @@ const Profile = () => {
                   <div className="flex justify-end pt-2">
                     <Button type="submit" disabled={loading} className="gap-2">
                       <Save className="h-4 w-4" />
-                      {loading ? 'Enregistrement...' : 'Enregistrer'}
+                      {loading ? t('common.saving') : t('common.save')}
                     </Button>
                   </div>
                 </form>
@@ -519,17 +522,17 @@ const Profile = () => {
               <CardHeader className="pb-4">
                 <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                   <Lock className="h-4 w-4 sm:h-5 sm:w-5" />
-                  Sécurité
+                  {t('profile.security')}
                 </CardTitle>
                 <CardDescription>
-                  Modifiez votre mot de passe
+                  {t('profile.changePassword')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="new_password" className="text-sm">
-                      Nouveau mot de passe
+                      {t('profile.newPassword')}
                     </Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -546,7 +549,7 @@ const Profile = () => {
 
                   <div className="space-y-2">
                     <Label htmlFor="confirm_password" className="text-sm">
-                      Confirmer le mot de passe
+                      {t('profile.confirmPassword')}
                     </Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -565,7 +568,7 @@ const Profile = () => {
                 {passwordData.newPassword && passwordData.newPassword.length < 6 && (
                   <div className="flex items-center gap-2 text-sm text-amber-600">
                     <AlertCircle className="h-4 w-4" />
-                    Le mot de passe doit contenir au moins 6 caractères
+                    {t('profile.passwordMinWarning')}
                   </div>
                 )}
 
@@ -578,9 +581,25 @@ const Profile = () => {
                     className="gap-2"
                   >
                     <Lock className="h-4 w-4" />
-                    {pwdLoading ? 'Mise à jour...' : 'Mettre à jour'}
+                    {pwdLoading ? t('profile.updating') : t('profile.update')}
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Language Section */}
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <Globe className="h-4 w-4 sm:h-5 sm:w-5" />
+                  {t('profile.language')}
+                </CardTitle>
+                <CardDescription>
+                  {t('profile.languageDesc')}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <LanguageSelector variant="full" />
               </CardContent>
             </Card>
 
@@ -589,10 +608,10 @@ const Profile = () => {
               <CardHeader className="pb-4">
                 <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                   <Activity className="h-4 w-4 sm:h-5 sm:w-5" />
-                  Historique des activités
+                  {t('profile.activityHistory')}
                 </CardTitle>
                 <CardDescription>
-                  Vos 20 dernières actions sur la plateforme
+                  {t('profile.last20Actions')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -603,7 +622,7 @@ const Profile = () => {
                 ) : activityHistory.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>Aucune activité enregistrée</p>
+                    <p>{t('profile.noActivity')}</p>
                   </div>
                 ) : (
                   <ScrollArea className="h-[300px] pr-4">

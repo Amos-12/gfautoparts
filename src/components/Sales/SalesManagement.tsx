@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatLocalizedDateTime } from '@/lib/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ShoppingCart, Search, TrendingUp, Calendar, Eye, Trash2, Receipt, DollarSign, LayoutGrid, List, Download, FileText, Users, RotateCcw } from 'lucide-react';
+import { ShoppingCart, Search, TrendingUp, Calendar, Eye, Trash2, Receipt, DollarSign, LayoutGrid, List, Download, FileText, Users, RotateCcw, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { SaleDetailsDialog } from './SaleDetailsDialog';
@@ -17,6 +19,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import { useCurrencyCalculations, currencyUtils } from '@/hooks/useCurrencyCalculations';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
+import { useSubscription } from '@/hooks/useSubscription';
 
 import { 
   AlertDialog, 
@@ -81,9 +84,11 @@ const formatCompactNumber = (amount: number, isMobile: boolean): string => {
 };
 
 export const SalesManagement = () => {
+  const { t } = useTranslation();
   // Centralized hooks
   const { settings: companySettingsHook } = useCompanySettings();
   const currencyCalc = useCurrencyCalculations();
+  const { plan: subPlan, isFreePlan } = useSubscription();
   
   const [sales, setSales] = useState<Sale[]>([]);
   const [filteredSales, setFilteredSales] = useState<Sale[]>([]);
@@ -160,11 +165,12 @@ export const SalesManagement = () => {
 
   const fetchCompanySettings = async () => {
     const { data } = await supabase
-      .from('company_settings')
+      .from('companies')
       .select('*')
+      .limit(1)
       .maybeSingle();
     if (data) {
-      setCompanySettings(data);
+      setCompanySettings({ ...data, company_name: data.name });
     }
   };
 
@@ -226,43 +232,20 @@ export const SalesManagement = () => {
     resetPage();
   }, [searchTerm, currencyFilter, periodFilter, sellerFilter, sales]);
 
-  // Récupère TOUTES les lignes d'une table (contourne la limite de 1000 de PostgREST)
-  const fetchAllRows = async <T,>(
-    table: string,
-    columns: string,
-    orderBy?: { column: string; ascending: boolean }
-  ): Promise<T[]> => {
-    const PAGE_SIZE = 1000;
-    let from = 0;
-    const rows: T[] = [];
-
-    while (true) {
-      let query = supabase.from(table as any).select(columns).range(from, from + PAGE_SIZE - 1);
-      if (orderBy) query = query.order(orderBy.column, { ascending: orderBy.ascending });
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      const batch = (data || []) as unknown as T[];
-      rows.push(...batch);
-      if (batch.length < PAGE_SIZE) break;
-      from += PAGE_SIZE;
-    }
-
-    return rows;
-  };
-
   const fetchSales = async () => {
     try {
       // Fetch sales, items and settings in parallel for better performance
-      const [salesData, allItems, settingsResult] = await Promise.all([
-        fetchAllRows<any>('sales', '*', { column: 'created_at', ascending: false }),
-        fetchAllRows<any>('sale_items', 'sale_id, subtotal, currency'),
-        supabase.from('company_settings').select('tva_rate').limit(1).maybeSingle()
+      const [salesResult, itemsResult, settingsResult] = await Promise.all([
+        supabase.from('sales').select('*').order('created_at', { ascending: false }),
+        supabase.from('sale_items').select('sale_id, subtotal, currency'),
+        supabase.from('companies').select('tva_rate').limit(1).single()
       ]);
 
-      const tvaRate = settingsResult.data?.tva_rate ?? 0;
-
+      if (salesResult.error) throw salesResult.error;
+      
+      const salesData = salesResult.data || [];
+      const allItems = itemsResult.data || [];
+      const tvaRate = settingsResult.data?.tva_rate || 0;
 
       // Build a map of sale_id -> currencies (HT amounts from items)
       const saleItemsMap = new Map<string, { htg: number; usd: number }>();
@@ -349,8 +332,8 @@ export const SalesManagement = () => {
     } catch (error) {
       console.error('Error fetching sales:', error);
       toast({
-        title: "Erreur",
-        description: "Impossible de charger les ventes",
+        title: t('common.error'),
+        description: t('sales.loadError'),
         variant: "destructive"
       });
     } finally {
@@ -363,17 +346,14 @@ export const SalesManagement = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Un utilisateur peut avoir plusieurs rôles : on récupère toutes les lignes
       const { data, error } = await supabase
         .from('user_roles')
-        .select('role, is_active')
-        .eq('user_id', user.id);
+        .select('role')
+        .eq('user_id', user.id)
+        .single();
 
       if (error) throw error;
-      const admin = (data || []).some((r: any) =>
-        (r.role === 'admin' || r.role === 'super_admin') && r.is_active !== false
-      );
-      setIsAdmin(admin);
+      setIsAdmin(data?.role === 'admin');
     } catch (error) {
       console.error('Error checking admin role:', error);
       setIsAdmin(false);
@@ -396,18 +376,7 @@ export const SalesManagement = () => {
 
       if (error) {
         console.error('Edge function error:', error);
-        // Extraire le message réel renvoyé par la fonction (réponse non-2xx)
-        let detail = error.message || 'Erreur lors de la suppression';
-        const ctx = (error as any).context;
-        try {
-          if (ctx && typeof ctx.json === 'function') {
-            const body = await ctx.clone().json();
-            if (body?.error) detail = body.error;
-          }
-        } catch (parseErr) {
-          console.error('Impossible de lire le corps de la réponse:', parseErr);
-        }
-        throw new Error(detail);
+        throw new Error(error.message || 'Erreur lors de la suppression');
       }
 
       if (!data?.success) {
@@ -415,8 +384,8 @@ export const SalesManagement = () => {
       }
 
       toast({
-        title: "Vente supprimée",
-        description: data.message || `${data.restoredProducts || 0} produit(s) remis en stock`,
+        title: t('sales.saleDeleted'),
+        description: t('sales.saleDeletedDesc', { count: data.restoredProducts || 0 }),
       });
 
       // Recharger la liste
@@ -424,15 +393,15 @@ export const SalesManagement = () => {
     } catch (error) {
       console.error('Error deleting sale:', error);
       toast({
-        title: "Erreur",
-        description: error instanceof Error ? error.message : "Impossible de supprimer la vente",
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : t('sales.deleteError'),
         variant: "destructive"
       });
     }
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('fr-FR', {
+    return formatLocalizedDateTime(dateString, {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -485,7 +454,12 @@ export const SalesManagement = () => {
 
 
   // Export functions
+
   const exportToExcel = () => {
+    if (isFreePlan) {
+      toast({ title: t('common.premiumFeature'), description: t('common.premiumExportExcel'), variant: "destructive" });
+      return;
+    }
     const rate = companySettings?.usd_htg_rate || 132;
     const displayCurrency = (companySettings?.default_display_currency || 'HTG') as 'USD' | 'HTG';
     
@@ -512,10 +486,14 @@ export const SalesManagement = () => {
     XLSX.utils.book_append_sheet(wb, ws, 'Ventes');
     XLSX.writeFile(wb, `ventes_${new Date().toISOString().split('T')[0]}.xlsx`);
     
-    toast({ title: "Export Excel", description: `${filteredSales.length} ventes exportées` });
+    toast({ title: t('common.exportSuccess'), description: t('sales.exportExcelDesc', { count: filteredSales.length }) });
   };
 
   const exportToPDF = async () => {
+    if (isFreePlan) {
+      toast({ title: t('common.premiumFeature'), description: t('common.premiumExportPdf'), variant: "destructive" });
+      return;
+    }
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.getWidth();
     let yPos = 15;
@@ -647,14 +625,14 @@ export const SalesManagement = () => {
     pdf.text(`Généré par ${companySettings?.company_name || 'Système'} - ${new Date().toLocaleString('fr-FR')}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
     
     pdf.save(`rapport_ventes_${new Date().toISOString().split('T')[0]}.pdf`);
-    toast({ title: "Export PDF", description: `Rapport généré avec ${filteredSales.length} ventes` });
+    toast({ title: t('common.exportSuccess'), description: t('sales.exportPdfDesc', { count: filteredSales.length }) });
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <ShoppingCart className="w-8 h-8 text-primary animate-pulse" />
-        <span className="ml-2 text-muted-foreground">Chargement...</span>
+        <span className="ml-2 text-muted-foreground">{t('common.loading')}</span>
       </div>
     );
   }
@@ -664,7 +642,7 @@ export const SalesManagement = () => {
     <div className="space-y-4 sm:space-y-6">
       {/* Header with currency indicator */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg sm:text-2xl font-bold text-foreground">Gestion des Ventes</h2>
+        <h2 className="text-lg sm:text-2xl font-bold text-foreground">{t('sales.title')}</h2>
         <Badge 
           variant="outline" 
           className={`text-xs px-2 py-0.5 ${
@@ -673,7 +651,7 @@ export const SalesManagement = () => {
               : 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700'
           }`}
         >
-          Affichage: {filteredStats.displayCurrency === 'USD' ? '$ USD' : 'HTG'}
+          {t('sales.display')}: {filteredStats.displayCurrency === 'USD' ? '$ USD' : 'HTG'}
         </Badge>
       </div>
 
@@ -683,7 +661,7 @@ export const SalesManagement = () => {
           <CardContent className="p-2 sm:p-3 md:p-4">
             <div className="flex items-center justify-between gap-1 sm:gap-2">
               <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-muted-foreground">Ventes</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">{t('sales.salesCountLabel')}</p>
                 <p className="text-sm sm:text-base md:text-lg font-bold">{filteredStats.count}</p>
               </div>
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-500/15 flex items-center justify-center shrink-0">
@@ -697,7 +675,7 @@ export const SalesManagement = () => {
           <CardContent className="p-2 sm:p-3 md:p-4">
             <div className="flex items-center justify-between gap-1 sm:gap-2">
               <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-muted-foreground">Revenu Total</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">{t('sales.totalRevenue')}</p>
                 <p className="text-sm sm:text-base md:text-lg font-bold truncate text-primary">
                   {filteredStats.displayCurrency === 'USD' 
                     ? `$${formatCompactNumber(filteredStats.unifiedTotal, isMobile)}`
@@ -740,15 +718,15 @@ export const SalesManagement = () => {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <CardTitle className="flex items-center gap-2">
               <ShoppingCart className="w-5 h-5" />
-              Historique des Ventes
+              {t('sales.history')}
             </CardTitle>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={exportToExcel} className="h-8">
-                <Download className="w-4 h-4 mr-1" />
+                {isFreePlan ? <Lock className="w-4 h-4 mr-1" /> : <Download className="w-4 h-4 mr-1" />}
                 <span className="hidden sm:inline">Excel</span>
               </Button>
               <Button variant="outline" size="sm" onClick={exportToPDF} className="h-8">
-                <FileText className="w-4 h-4 mr-1" />
+                {isFreePlan ? <Lock className="w-4 h-4 mr-1" /> : <FileText className="w-4 h-4 mr-1" />}
                 <span className="hidden sm:inline">PDF</span>
               </Button>
             </div>
@@ -757,7 +735,7 @@ export const SalesManagement = () => {
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Rechercher par client ou vendeur..."
+                placeholder={t('sales.searchPlaceholder')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
@@ -768,13 +746,13 @@ export const SalesManagement = () => {
               <Select value={periodFilter} onValueChange={(value: 'all' | 'today' | 'week' | 'month') => setPeriodFilter(value)}>
                 <SelectTrigger className="w-[90px] sm:w-[130px] shrink-0 h-9">
                   <Calendar className="w-3.5 h-3.5 mr-1 text-muted-foreground" />
-                  <SelectValue placeholder="Période" />
+                  <SelectValue placeholder={t('sales.filters.period')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tout</SelectItem>
-                  <SelectItem value="today">Aujourd'hui</SelectItem>
-                  <SelectItem value="week">Cette semaine</SelectItem>
-                  <SelectItem value="month">Ce mois</SelectItem>
+                  <SelectItem value="all">{t('common.all')}</SelectItem>
+                  <SelectItem value="today">{t('common.today')}</SelectItem>
+                  <SelectItem value="week">{t('common.thisWeek')}</SelectItem>
+                  <SelectItem value="month">{t('common.thisMonth')}</SelectItem>
                 </SelectContent>
               </Select>
               
@@ -782,10 +760,10 @@ export const SalesManagement = () => {
               <Select value={sellerFilter} onValueChange={setSellerFilter}>
                 <SelectTrigger className="w-[85px] sm:w-[140px] shrink-0 h-9">
                   <Users className="w-3.5 h-3.5 mr-1 text-muted-foreground" />
-                  <SelectValue placeholder="Vendeur" />
+                  <SelectValue placeholder={t('common.seller')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous</SelectItem>
+                  <SelectItem value="all">{t('sales.filters.allSellers')}</SelectItem>
                   {sellers.map(seller => (
                     <SelectItem key={seller.user_id} value={seller.user_id}>
                       {seller.full_name}
@@ -798,13 +776,13 @@ export const SalesManagement = () => {
               <Select value={currencyFilter} onValueChange={(value: 'all' | 'HTG' | 'USD' | 'mixed') => setCurrencyFilter(value)}>
                 <SelectTrigger className="w-[80px] sm:w-[110px] shrink-0 h-9">
                   <DollarSign className="w-3.5 h-3.5 mr-1 text-muted-foreground" />
-                  <SelectValue placeholder="Devise" />
+                  <SelectValue placeholder={t('common.currency')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toute</SelectItem>
+                  <SelectItem value="all">{t('sales.filters.allCurrencies')}</SelectItem>
                   <SelectItem value="HTG">HTG</SelectItem>
                   <SelectItem value="USD">USD</SelectItem>
-                  <SelectItem value="mixed">Mixte</SelectItem>
+                  <SelectItem value="mixed">{t('sales.filters.mixed')}</SelectItem>
                 </SelectContent>
               </Select>
               
@@ -857,7 +835,7 @@ export const SalesManagement = () => {
               {paginatedSales.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <ShoppingCart className="w-10 h-10 mx-auto mb-3 opacity-50" />
-                  <p>Aucune vente trouvée</p>
+                  <p>{t('sales.noSales')}</p>
                 </div>
               ) : (
                 paginatedSales.map((sale, index) => (
@@ -881,19 +859,19 @@ export const SalesManagement = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead className="hidden md:table-cell">Vendeur</TableHead>
-                    <TableHead>Montant</TableHead>
-                    <TableHead className="hidden sm:table-cell">Paiement</TableHead>
-                    <TableHead>Actions</TableHead>
+                     <TableHead>{t('common.date')}</TableHead>
+                    <TableHead>{t('common.client')}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t('common.seller')}</TableHead>
+                    <TableHead>{t('common.amount')}</TableHead>
+                    <TableHead className="hidden sm:table-cell">{t('common.payment')}</TableHead>
+                    <TableHead>{t('common.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedSales.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        Aucune vente trouvée
+                        {t('sales.noSales')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -903,7 +881,7 @@ export const SalesManagement = () => {
                           {formatDate(sale.created_at)}
                         </TableCell>
                         <TableCell className="text-xs sm:text-sm">
-                          {sale.customer_name || <span className="text-muted-foreground italic">Non renseigné</span>}
+                          {sale.customer_name || <span className="text-muted-foreground italic">{t('sales.notSpecified')}</span>}
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-xs sm:text-sm">
                           {sale.profiles?.full_name || <span className="text-muted-foreground italic">N/A</span>}
