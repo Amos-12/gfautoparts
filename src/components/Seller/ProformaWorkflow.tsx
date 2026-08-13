@@ -44,6 +44,7 @@ import { useCategories, useSousCategories } from '@/hooks/useCategories';
 import { useCurrencyCalculations } from '@/hooks/useCurrencyCalculations';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { SavedProformasList } from './SavedProformasList';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 
 interface SavedProforma {
   id: string;
@@ -280,10 +281,8 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
         query = query.in('category', authorizedCategories as any);
       }
       
-      const { data, error } = await query.order('name');
-
-      if (error) throw error;
-      
+     const data = await  fetchAllRows<any>(() => query.order('name'));
+           
       const availableProducts = (data || []).filter((product) => {
         let hasStock = false;
         
