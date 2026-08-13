@@ -45,7 +45,8 @@ import { generateAdminDashboardPdf } from '@/lib/adminDashboardPdf';
 import { useSaleCalculations } from '@/hooks/useSaleCalculations';
 import { useCurrencyCalculations } from '@/hooks/useCurrencyCalculations';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
-import { fetchAllRows } from ' @/lib/fetchAllRows';
+import { fetchAllRows } from '@/lib/fetchAllRows';
+
 interface RevenueData {
   date: string;
   revenue: number;
@@ -477,9 +478,8 @@ export const AdminDashboardCharts = () => {
     setTopProducts(topProductsData);
   };
 
-  cconst fetchCategoryData = async () => {
-    const products = await fetchAllRows(
-      () => supabase
+  const fetchCategoryData = async () => {
+    const products = await fetchAllRows<any>(() => supabase
       .from('products')
       .select('category')
     );
