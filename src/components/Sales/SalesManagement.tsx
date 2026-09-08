@@ -18,6 +18,8 @@ import jsPDF from 'jspdf';
 import { useCurrencyCalculations, currencyUtils } from '@/hooks/useCurrencyCalculations';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { isSessionError, getFriendlyErrorMessage, redirectToLogin } from '@/lib/sessionErrors';
+import { saleCalculationUtils } from '@/hooks/useSaleCalculations';
+import { PeriodRangeFilter, PeriodRange, isInPeriod, periodRangeLabel } from '@/components/Common/PeriodRangeFilter';
 
 import { 
   AlertDialog, 
@@ -50,6 +52,10 @@ interface Sale {
     htg: number;
     usd: number;
   };
+  /** Total TTC converti dans la devise d'affichage (calcul centralisé) */
+  unifiedTotal?: number;
+  discount_amount?: number | null;
+  discount_currency?: string | null;
 }
 
 interface RevenueStats {
@@ -90,7 +96,7 @@ export const SalesManagement = () => {
   const [filteredSales, setFilteredSales] = useState<Sale[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [currencyFilter, setCurrencyFilter] = useState<'all' | 'HTG' | 'USD' | 'mixed'>('all');
-  const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [periodRange, setPeriodRange] = useState<PeriodRange>({ preset: 'all' });
   const [sellerFilter, setSellerFilter] = useState<string>('all');
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,35 +115,6 @@ export const SalesManagement = () => {
       setViewMode('cards');
     }
   }, [isMobile]);
-
-  // Helper function to filter by period
-  const filterByPeriod = (saleDate: Date, filter: 'all' | 'today' | 'week' | 'month'): boolean => {
-    if (filter === 'all') return true;
-    
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const saleDay = new Date(saleDate.getFullYear(), saleDate.getMonth(), saleDate.getDate());
-    
-    if (filter === 'today') {
-      return saleDay.getTime() === today.getTime();
-    }
-    
-    if (filter === 'week') {
-      // Start of week (Monday)
-      const dayOfWeek = now.getDay();
-      const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      const startOfWeek = new Date(today);
-      startOfWeek.setDate(today.getDate() - diffToMonday);
-      return saleDay >= startOfWeek;
-    }
-    
-    if (filter === 'month') {
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      return saleDay >= startOfMonth;
-    }
-    
-    return true;
-  };
 
   const { 
     paginatedItems: paginatedSales, 
@@ -214,8 +191,8 @@ export const SalesManagement = () => {
     }
 
     // Apply period filter
-    if (periodFilter !== 'all') {
-      filtered = filtered.filter(sale => filterByPeriod(new Date(sale.created_at), periodFilter));
+    if (periodRange.preset !== 'all') {
+      filtered = filtered.filter(sale => isInPeriod(new Date(sale.created_at), periodRange));
     }
 
     // Apply seller filter
@@ -225,7 +202,7 @@ export const SalesManagement = () => {
 
     setFilteredSales(filtered);
     resetPage();
-  }, [searchTerm, currencyFilter, periodFilter, sellerFilter, sales]);
+  }, [searchTerm, currencyFilter, periodRange, sellerFilter, sales]);
 
   // Récupère TOUTES les lignes d'une table (contourne la limite de 1000 de PostgREST)
   const fetchAllRows = async <T,>(
@@ -258,11 +235,21 @@ export const SalesManagement = () => {
       // Fetch sales, items and settings in parallel for better performance
       const [salesData, allItems, settingsResult] = await Promise.all([
         fetchAllRows<any>('sales', '*', { column: 'created_at', ascending: false }),
-        fetchAllRows<any>('sale_items', 'sale_id, subtotal, currency'),
-        supabase.from('company_settings').select('tva_rate').limit(1).maybeSingle()
+        fetchAllRows<any>('sale_items', 'sale_id, subtotal, currency, profit_amount'),
+        supabase.from('company_settings').select('tva_rate, usd_htg_rate, default_display_currency').limit(1).maybeSingle()
       ]);
 
       const tvaRate = settingsResult.data?.tva_rate ?? 0;
+      const usdHtgRate = settingsResult.data?.usd_htg_rate || 132;
+      const displayCurrency = (settingsResult.data?.default_display_currency || 'HTG') as 'USD' | 'HTG';
+
+      // Regroupe les lignes d'articles par vente (pour le calcul centralisé)
+      const itemsBySale = new Map<string, any[]>();
+      allItems.forEach(item => {
+        const list = itemsBySale.get(item.sale_id) || [];
+        list.push(item);
+        itemsBySale.set(item.sale_id, list);
+      });
 
 
       // Build a map of sale_id -> currencies (HT amounts from items)
@@ -295,21 +282,29 @@ export const SalesManagement = () => {
         const rawCurrencies = saleItemsMap.get(sale.id) || { htg: 0, usd: 0 };
         const totalRaw = rawCurrencies.htg + rawCurrencies.usd;
         
-        // Apply discount proportionally to each currency
-        const discountRatio = totalRaw > 0 ? (sale.discount_amount || 0) / totalRaw : 0;
-        const htgAfterDiscount = rawCurrencies.htg * (1 - discountRatio);
-        const usdAfterDiscount = rawCurrencies.usd * (1 - discountRatio);
-        
-        // Add TVA to get TTC amounts
+        // Répartition de la remise au prorata (pour l'affichage par devise)
+        const discountRatio = totalRaw > 0
+          ? Math.min(1, (sale.discount_amount || 0) / totalRaw)
+          : 0;
         const currencies = {
-          htg: htgAfterDiscount * (1 + tvaRate / 100),
-          usd: usdAfterDiscount * (1 + tvaRate / 100)
+          htg: rawCurrencies.htg * (1 - discountRatio) * (1 + tvaRate / 100),
+          usd: rawCurrencies.usd * (1 - discountRatio) * (1 + tvaRate / 100)
         };
+
+        // Total TTC officiel : calcul centralisé (remise dans sa devise + TVA)
+        const { totalTTC } = saleCalculationUtils.calculateSaleTotal(
+          sale,
+          itemsBySale.get(sale.id) || [],
+          usdHtgRate,
+          displayCurrency,
+          tvaRate
+        );
         
         return {
           ...sale,
           profiles: { full_name: profilesMap.get(sale.seller_id) || 'N/A' },
-          currencies
+          currencies,
+          unifiedTotal: totalTTC
         };
       });
 
@@ -454,9 +449,11 @@ export const SalesManagement = () => {
     const rate = companySettingsHook?.usdHtgRate || companySettings?.usd_htg_rate || 132;
     const displayCurrency = companySettingsHook?.displayCurrency || (companySettings?.default_display_currency || 'HTG') as 'USD' | 'HTG';
     
+    let unifiedTotal = 0;
     filteredSales.forEach(sale => {
       htg += sale.currencies?.htg || 0;
       usd += sale.currencies?.usd || 0;
+      unifiedTotal += sale.unifiedTotal ?? 0;
     });
     
     // TVA is already included in currencies (TTC), so calculate HT first then TVA
@@ -465,10 +462,6 @@ export const SalesManagement = () => {
     tvaHtg = htg - htgHT;
     tvaUsd = usd - usdHT;
     
-    // Unified total converted to display currency using currencyUtils
-    const unifiedTotal = displayCurrency === 'HTG'
-      ? htg + (usd * rate)
-      : usd + (htg / rate);
     
     const unifiedTva = displayCurrency === 'HTG'
       ? tvaHtg + (tvaUsd * rate)
@@ -562,13 +555,8 @@ export const SalesManagement = () => {
     yPos += 8;
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
-    const periodLabels: Record<string, string> = {
-      all: 'Toutes les ventes',
-      today: "Aujourd'hui",
-      week: 'Cette semaine',
-      month: 'Ce mois'
-    };
-    pdf.text(`Période: ${periodLabels[periodFilter]} | Généré le ${new Date().toLocaleDateString('fr-FR')}`, pageWidth / 2, yPos, { align: 'center' });
+    const periodText = periodRange.preset === 'all' ? 'Toutes les ventes' : periodRangeLabel(periodRange);
+    pdf.text(`Période: ${periodText} | Généré le ${new Date().toLocaleDateString('fr-FR')}`, pageWidth / 2, yPos, { align: 'center' });
     
     // Stats box
     yPos += 12;
@@ -629,7 +617,7 @@ export const SalesManagement = () => {
       // Convert amount to display currency
       const htg = sale.currencies?.htg || 0;
       const usd = sale.currencies?.usd || 0;
-      const convertedAmount = displayCurrency === 'HTG' ? htg + (usd * rate) : usd + (htg / rate);
+      const convertedAmount = sale.unifiedTotal ?? (displayCurrency === 'HTG' ? htg + (usd * rate) : usd + (htg / rate));
       const amount = `${currencySymbol}${formatNumber(convertedAmount).substring(0, 12)}${currencySuffix}`;
       pdf.text(amount, 145, yPos);
       pdf.text(sale.payment_method.substring(0, 10), 175, yPos);
@@ -768,18 +756,11 @@ export const SalesManagement = () => {
             </div>
             <div className="flex gap-2 items-center overflow-x-auto pb-1">
               {/* Period filter */}
-              <Select value={periodFilter} onValueChange={(value: 'all' | 'today' | 'week' | 'month') => setPeriodFilter(value)}>
-                <SelectTrigger className="w-[90px] sm:w-[130px] shrink-0 h-9">
-                  <Calendar className="w-3.5 h-3.5 mr-1 text-muted-foreground" />
-                  <SelectValue placeholder="Période" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tout</SelectItem>
-                  <SelectItem value="today">Aujourd'hui</SelectItem>
-                  <SelectItem value="week">Cette semaine</SelectItem>
-                  <SelectItem value="month">Ce mois</SelectItem>
-                </SelectContent>
-              </Select>
+              <PeriodRangeFilter
+                value={periodRange}
+                onChange={setPeriodRange}
+                className="shrink-0"
+              />
               
               {/* Seller filter */}
               <Select value={sellerFilter} onValueChange={setSellerFilter}>
@@ -812,14 +793,14 @@ export const SalesManagement = () => {
               </Select>
               
               {/* Reset filters button */}
-              {(searchTerm || periodFilter !== 'all' || sellerFilter !== 'all' || currencyFilter !== 'all') && (
+              {(searchTerm || periodRange.preset !== 'all' || sellerFilter !== 'all' || currencyFilter !== 'all') && (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-9 px-2.5 shrink-0 text-muted-foreground hover:text-foreground"
                   onClick={() => {
                     setSearchTerm('');
-                    setPeriodFilter('all');
+                    setPeriodRange({ preset: 'all' });
                     setSellerFilter('all');
                     setCurrencyFilter('all');
                   }}

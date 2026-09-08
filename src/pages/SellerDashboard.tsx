@@ -7,7 +7,10 @@ import { SellerDashboardStats } from '@/components/Dashboard/SellerDashboardStat
 import { StockAlerts } from '@/components/Notifications/StockAlerts';
 import { ProductManagement } from '@/components/Products/ProductManagement';
 import { SaleDetailsDialog } from '@/components/Sales/SaleDetailsDialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { usePagination } from '@/hooks/usePagination';
+import { PeriodRangeFilter, PeriodRange, resolvePeriodRange, periodRangeLabel } from '@/components/Common/PeriodRangeFilter';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import { 
   TrendingUp,
   Receipt,
@@ -17,7 +20,6 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSaleCalculations, SaleForCalc } from '@/hooks/useSaleCalculations';
-import { startOfDay, startOfWeek, startOfMonth } from 'date-fns';
 import logo from '@/assets/logo.png';
 
 interface EnrichedSale {
@@ -66,7 +68,7 @@ const SellerDashboard = () => {
   const [currentSection, setCurrentSection] = useState('dashboard');
   const [isApproved, setIsApproved] = useState<boolean | null>(null);
   const [loadingApproval, setLoadingApproval] = useState(true);
-  const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [periodRange, setPeriodRange] = useState<PeriodRange>({ preset: 'all' });
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [showSaleDetails, setShowSaleDetails] = useState(false);
   
@@ -76,6 +78,20 @@ const SellerDashboard = () => {
 
   // Use hook values with fallbacks
   const displayCurrency = saleCalc?.displayCurrency || 'HTG';
+
+  // Pagination : 20 ventes par page
+  const {
+    paginatedItems: paginatedSales,
+    currentPage,
+    totalPages,
+    totalItems,
+    pageSize,
+    nextPage,
+    prevPage,
+    hasNextPage,
+    hasPrevPage,
+    resetPage,
+  } = usePagination(sales, 20);
 
   useEffect(() => {
     if (user && !authLoading) {
@@ -88,7 +104,7 @@ const SellerDashboard = () => {
     if (user && !authLoading && saleCalc && currentSection === 'history') {
       fetchMySales();
     }
-  }, [periodFilter, currentSection, saleCalc]);
+  }, [periodRange, currentSection, saleCalc]);
 
   const checkApprovalStatus = async () => {
     if (!user) return;
@@ -115,39 +131,37 @@ const SellerDashboard = () => {
     if (!user || !saleCalc) return;
 
     try {
-      let query = supabase
-        .from('sales')
-        .select('id, created_at, total_amount, subtotal, discount_amount, discount_currency, discount_type, discount_value, customer_name, payment_method')
-        .eq('seller_id', user.id)
-        .order('created_at', { ascending: false });
-
-      // Apply period filter
-      const now = new Date();
-      if (periodFilter === 'today') {
-        query = query.gte('created_at', startOfDay(now).toISOString());
-      } else if (periodFilter === 'week') {
-        query = query.gte('created_at', startOfWeek(now, { weekStartsOn: 1 }).toISOString());
-      } else if (periodFilter === 'month') {
-        query = query.gte('created_at', startOfMonth(now).toISOString());
-      } else {
-        // Only limit when showing all
-        query = query.limit(20);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
+      // Chargement complet (plus de plafond) avec bornes de période locales
+      const { from, to } = resolvePeriodRange(periodRange);
+      const data = await fetchAllRows<any>(() => {
+        let q = supabase
+          .from('sales')
+          .select('id, created_at, total_amount, subtotal, discount_amount, discount_currency, discount_type, discount_value, customer_name, payment_method')
+          .eq('seller_id', user.id)
+          .order('created_at', { ascending: false });
+        if (from) q = q.gte('created_at', from.toISOString());
+        if (to) q = q.lte('created_at', to.toISOString());
+        return q;
+      });
       
       if (!data || data.length === 0) {
         setSales([]);
         return;
       }
 
-      // Fetch sale items for proper calculation
-      const saleIds = data.map(s => s.id);
-      const { data: saleItems } = await supabase
-        .from('sale_items')
-        .select('sale_id, subtotal, currency, profit_amount')
-        .in('sale_id', saleIds);
+      // Fetch sale items for proper calculation (par paquets, sans plafond)
+      const saleIds = data.map((s: any) => s.id);
+      const saleItems: any[] = [];
+      for (let i = 0; i < saleIds.length; i += 200) {
+        const chunk = saleIds.slice(i, i + 200);
+        const rows = await fetchAllRows<any>(() =>
+          supabase
+            .from('sale_items')
+            .select('sale_id, subtotal, currency, profit_amount')
+            .in('sale_id', chunk)
+        );
+        saleItems.push(...rows);
+      }
 
       // Calculate proper TTC for each sale using the centralized hook
       const enrichedSales: EnrichedSale[] = data.map(sale => {
@@ -161,10 +175,11 @@ const SellerDashboard = () => {
       });
 
       setSales(enrichedSales);
+      resetPage();
     } catch (error) {
       console.error('Error fetching sales:', error);
     }
-  }, [user, saleCalc, periodFilter]);
+  }, [user, saleCalc, periodRange, resetPage]);
 
   // Handler for converting proforma to sale
   const handleConvertProformaToSale = (items: ProformaCartItem[], customerName: string) => {
@@ -199,12 +214,7 @@ const SellerDashboard = () => {
       case 'notifications':
         return <StockAlerts />;
       case 'history':
-        const periodLabels: Record<string, string> = {
-          all: '20 récentes',
-          today: "Aujourd'hui",
-          week: 'Cette semaine',
-          month: 'Ce mois'
-        };
+        const periodLabel = periodRange.preset === 'all' ? 'toutes' : periodRangeLabel(periodRange);
         
         // Calculate total for filtered period using displayAmount (properly calculated TTC)
         const periodTotal = sales.reduce((sum, sale) => sum + sale.displayAmount, 0);
@@ -220,24 +230,13 @@ const SellerDashboard = () => {
                     ({sales.length} ventes)
                   </span>
                 </CardTitle>
-                <Select value={periodFilter} onValueChange={(v) => setPeriodFilter(v as typeof periodFilter)}>
-                  <SelectTrigger className="w-36 h-8 text-xs">
-                    <Calendar className="w-3 h-3 mr-1" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">20 récentes</SelectItem>
-                    <SelectItem value="today">Aujourd'hui</SelectItem>
-                    <SelectItem value="week">Cette semaine</SelectItem>
-                    <SelectItem value="month">Ce mois</SelectItem>
-                  </SelectContent>
-                </Select>
+                <PeriodRangeFilter value={periodRange} onChange={setPeriodRange} allLabel="Toutes" />
               </div>
               
               {/* Period stats */}
               {sales.length > 0 && (
                 <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                  <span>Total {periodLabels[periodFilter]}:</span>
+                  <span>Total {periodLabel}:</span>
                   <span className="font-semibold text-foreground">
                     {displayCurrency === 'USD' 
                       ? `$${periodTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
@@ -255,7 +254,7 @@ const SellerDashboard = () => {
                 </div>
               ) : (
                 <div className="space-y-2 sm:space-y-3">
-                  {sales.map((sale) => (
+                  {paginatedSales.map((sale) => (
                     <div 
                       key={sale.id} 
                       className="flex items-center justify-between p-2 sm:p-3 border rounded-lg hover:bg-accent/50 transition-all cursor-pointer group"
@@ -294,6 +293,21 @@ const SellerDashboard = () => {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {totalPages > 1 && (
+                <div className="mt-4">
+                  <TablePagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={totalItems}
+                    pageSize={pageSize}
+                    onNextPage={nextPage}
+                    onPrevPage={prevPage}
+                    hasNextPage={hasNextPage}
+                    hasPrevPage={hasPrevPage}
+                  />
                 </div>
               )}
             </CardContent>

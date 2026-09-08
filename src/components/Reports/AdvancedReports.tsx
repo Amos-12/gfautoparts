@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -27,7 +27,8 @@ import {
 } from 'lucide-react';
 import { generateAdvancedReportPDF, CompanySettings } from '@/lib/pdfGenerator';
 import * as XLSX from 'xlsx';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay, subDays } from 'date-fns';
+import { PeriodRangeFilter, PeriodRange, resolvePeriodRange } from '@/components/Common/PeriodRangeFilter';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -71,10 +72,15 @@ const REPORT_FILTERS = {
 };
 
 export const AdvancedReports = () => {
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
-    to: new Date()
-  });
+  const [periodRange, setPeriodRange] = useState<PeriodRange>({ preset: 'month' });
+  // Bornes concrètes en heure locale (début de journée → fin de journée)
+  const dateRange = useMemo(() => {
+    const r = resolvePeriodRange(periodRange);
+    return {
+      from: r.from ?? startOfDay(subDays(new Date(), 3650)),
+      to: r.to ?? endOfDay(new Date()),
+    };
+  }, [periodRange]);
   const [reportType, setReportType] = useState<'sales' | 'products' | 'sellers'>('sales');
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -149,8 +155,8 @@ export const AdvancedReports = () => {
     try {
       setLoading(true);
       
-      const fromDate = format(dateRange.from, 'yyyy-MM-dd');
-      const toDate = format(dateRange.to, 'yyyy-MM-dd');
+      const fromDate = startOfDay(dateRange.from).toISOString();
+      const toDate = endOfDay(dateRange.to).toISOString();
       const rate = usdHtgRate;
 
       // Build sales query with filters
@@ -174,7 +180,7 @@ export const AdvancedReports = () => {
           )
         `)
         .gte('created_at', fromDate)
-        .lte('created_at', toDate + 'T23:59:59')
+        .lte('created_at', toDate)
         .order('created_at', { ascending: false });
 
       // Apply seller filter
@@ -671,41 +677,11 @@ ${reportData.paymentMethods.map(p => `${p.method},${p.count},${p.percentage.toFi
             {/* Date Range */}
             <div className="space-y-1 sm:space-y-2">
               <label className="text-xs sm:text-sm font-medium text-foreground">Période</label>
-              <div className="flex items-center gap-1 sm:gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="flex-1 justify-start text-left font-normal h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3">
-                      <CalendarIcon className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-                      {format(dateRange.from, 'dd/MM/yy', { locale: fr })}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateRange.from}
-                      onSelect={(date) => date && setDateRange(prev => ({ ...prev, from: date }))}
-                      className="pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
-                <span className="text-muted-foreground text-xs sm:text-sm">→</span>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="flex-1 justify-start text-left font-normal h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3">
-                      <CalendarIcon className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-                      {format(dateRange.to, 'dd/MM/yy', { locale: fr })}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateRange.to}
-                      onSelect={(date) => date && setDateRange(prev => ({ ...prev, to: date }))}
-                      className="pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
+              <PeriodRangeFilter
+                value={periodRange}
+                onChange={setPeriodRange}
+                allLabel="Tout l'historique"
+              />
             </div>
 
             {/* Report Type */}

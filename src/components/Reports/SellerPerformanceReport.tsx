@@ -19,7 +19,10 @@ import {
   RefreshCw,
   Package
 } from 'lucide-react';
-import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { format, differenceInMilliseconds, subDays, startOfDay, endOfDay } from 'date-fns';
+import { fetchAllRows } from '@/lib/fetchAllRows';
+import { saleCalculationUtils } from '@/hooks/useSaleCalculations';
+import { PeriodRangeFilter, PeriodRange, resolvePeriodRange } from '@/components/Common/PeriodRangeFilter';
 import { fr } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
 
@@ -39,25 +42,27 @@ interface SellerStats {
 interface CompanySettings {
   usd_htg_rate: number;
   default_display_currency: string;
+  tva_rate: number;
 }
 
 export const SellerPerformanceReport = () => {
   const [sellers, setSellers] = useState<SellerStats[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('30');
+  const [periodRange, setPeriodRange] = useState<PeriodRange>({ preset: 'month' });
   const [expandedSeller, setExpandedSeller] = useState<string | null>(null);
-  const [companySettings, setCompanySettings] = useState<CompanySettings>({ usd_htg_rate: 132, default_display_currency: 'HTG' });
+  const [companySettings, setCompanySettings] = useState<CompanySettings>({ usd_htg_rate: 132, default_display_currency: 'HTG', tva_rate: 0 });
 
   useEffect(() => {
     const fetchSettings = async () => {
       const { data } = await supabase
         .from('company_settings')
-        .select('usd_htg_rate, default_display_currency')
+        .select('usd_htg_rate, default_display_currency, tva_rate')
         .single();
       if (data) {
         setCompanySettings({
           usd_htg_rate: data.usd_htg_rate || 132,
-          default_display_currency: data.default_display_currency || 'HTG'
+          default_display_currency: data.default_display_currency || 'HTG',
+          tva_rate: data.tva_rate ?? 0
         });
       }
     };
@@ -67,13 +72,21 @@ export const SellerPerformanceReport = () => {
   const fetchSellerStats = async () => {
     setLoading(true);
     try {
-      const daysAgo = parseInt(period);
-      const startDate = startOfDay(subDays(new Date(), daysAgo)).toISOString();
-      const endDate = endOfDay(new Date()).toISOString();
-      
-      // Previous period for trend calculation
-      const prevStartDate = startOfDay(subDays(new Date(), daysAgo * 2)).toISOString();
-      const prevEndDate = startOfDay(subDays(new Date(), daysAgo)).toISOString();
+      const resolved = resolvePeriodRange(periodRange);
+      const startDate = (resolved.from || startOfDay(subDays(new Date(), 3650))).toISOString();
+      const endDate = (resolved.to || endOfDay(new Date())).toISOString();
+
+      // Période précédente de même durée (pour la tendance)
+      const durationMs = Math.max(
+        1,
+        differenceInMilliseconds(new Date(endDate), new Date(startDate))
+      );
+      const prevStartDate = new Date(new Date(startDate).getTime() - durationMs).toISOString();
+      const prevEndDate = startDate;
+
+      const rate = companySettings.usd_htg_rate;
+      const displayCur = (companySettings.default_display_currency || 'HTG') as 'USD' | 'HTG';
+      const tvaRate = companySettings.tva_rate || 0;
 
       // Fetch all sellers
       const { data: profiles } = await supabase
@@ -85,35 +98,66 @@ export const SellerPerformanceReport = () => {
         .select('user_id, role')
         .in('role', ['seller', 'admin']);
 
-      const sellerProfiles = profiles?.filter(p => 
+      const sellerProfiles = profiles?.filter(p =>
         userRoles?.some(r => r.user_id === p.user_id)
       ) || [];
 
-      // Fetch current period sales with sale_items including currency
-      const { data: currentSales } = await supabase
-        .from('sales')
-        .select(`
-          id,
-          seller_id,
-          total_amount,
-          created_at,
-          sale_items (
-            product_name,
-            quantity,
-            subtotal,
-            profit_amount,
-            currency
-          )
-        `)
-        .gte('created_at', startDate)
-        .lte('created_at', endDate);
+      // Ventes de la période (pagination complète, plus de plafond à 1000)
+      const currentSales = await fetchAllRows<any>(() =>
+        supabase
+          .from('sales')
+          .select('id, seller_id, total_amount, created_at, discount_amount, discount_currency, subtotal')
+          .gte('created_at', startDate)
+          .lte('created_at', endDate)
+          .order('created_at', { ascending: false })
+      );
 
-      // Fetch previous period sales for trend
-      const { data: prevSales } = await supabase
-        .from('sales')
-        .select('seller_id, total_amount')
-        .gte('created_at', prevStartDate)
-        .lt('created_at', prevEndDate);
+      const saleIds = currentSales.map(s => s.id);
+      const allItems: any[] = [];
+      for (let i = 0; i < saleIds.length; i += 200) {
+        const chunk = saleIds.slice(i, i + 200);
+        const items = await fetchAllRows<any>(() =>
+          supabase
+            .from('sale_items')
+            .select('sale_id, product_name, quantity, subtotal, profit_amount, currency')
+            .in('sale_id', chunk)
+        );
+        allItems.push(...items);
+      }
+
+      const itemsBySale = new Map<string, any[]>();
+      allItems.forEach(item => {
+        const list = itemsBySale.get(item.sale_id) || [];
+        list.push(item);
+        itemsBySale.set(item.sale_id, list);
+      });
+
+      // Période précédente (pour la tendance) — même calcul centralisé
+      const prevSales = await fetchAllRows<any>(() =>
+        supabase
+          .from('sales')
+          .select('id, seller_id, total_amount, discount_amount, discount_currency')
+          .gte('created_at', prevStartDate)
+          .lt('created_at', prevEndDate)
+      );
+      const prevSaleIds = prevSales.map(s => s.id);
+      const prevItems: any[] = [];
+      for (let i = 0; i < prevSaleIds.length; i += 200) {
+        const chunk = prevSaleIds.slice(i, i + 200);
+        const items = await fetchAllRows<any>(() =>
+          supabase
+            .from('sale_items')
+            .select('sale_id, subtotal, profit_amount, currency')
+            .in('sale_id', chunk)
+        );
+        prevItems.push(...items);
+      }
+      const prevItemsBySale = new Map<string, any[]>();
+      prevItems.forEach(item => {
+        const list = prevItemsBySale.get(item.sale_id) || [];
+        list.push(item);
+        prevItemsBySale.set(item.sale_id, list);
+      });
 
       // Calculate stats per seller
       const sellerStatsMap = new Map<string, SellerStats>();
@@ -133,54 +177,58 @@ export const SellerPerformanceReport = () => {
         });
       });
 
-      // Process current sales
       const productSalesMap = new Map<string, Map<string, { quantity: number; revenue: number }>>();
 
-      currentSales?.forEach(sale => {
+      currentSales.forEach(sale => {
         const stats = sellerStatsMap.get(sale.seller_id);
-        if (stats) {
-          stats.total_sales += 1;
-          
-          sale.sale_items?.forEach((item: any) => {
-            const currency = item.currency || 'HTG';
-            const amount = item.subtotal || 0;
-            
-            if (currency === 'USD') {
-              stats.total_revenue_usd += amount;
-              stats.total_revenue_converted += companySettings.default_display_currency === 'USD' 
-                ? amount 
-                : amount * companySettings.usd_htg_rate;
-            } else {
-              stats.total_revenue_htg += amount;
-              stats.total_revenue_converted += companySettings.default_display_currency === 'USD' 
-                ? amount / companySettings.usd_htg_rate 
-                : amount;
-            }
-            
-            stats.total_profit += item.profit_amount || 0;
-            
-            // Track products for this seller (convert to display currency for proper comparison)
-            if (!productSalesMap.has(sale.seller_id)) {
-              productSalesMap.set(sale.seller_id, new Map());
-            }
-            const sellerProducts = productSalesMap.get(sale.seller_id)!;
-            const existing = sellerProducts.get(item.product_name) || { quantity: 0, revenue: 0 };
-            const revenueConverted = companySettings.default_display_currency === 'USD'
-              ? (currency === 'USD' ? amount : amount / companySettings.usd_htg_rate)
-              : (currency === 'USD' ? amount * companySettings.usd_htg_rate : amount);
-            sellerProducts.set(item.product_name, {
-              quantity: existing.quantity + item.quantity,
-              revenue: existing.revenue + revenueConverted
-            });
+        if (!stats) return;
+
+        const items = itemsBySale.get(sale.id) || [];
+        // Calcul centralisé : remise (dans sa devise) déduite + TVA appliquée
+        const result = saleCalculationUtils.calculateSaleTotal(sale, items, rate, displayCur, tvaRate);
+
+        stats.total_sales += 1;
+        stats.total_revenue_converted += result.totalTTC;
+        stats.total_profit += result.profit;
+
+        // Répartition remise au prorata pour l'affichage par devise
+        const rawTotal = items.reduce((sum, it) => sum + (it.subtotal || 0), 0);
+        const discountRatio = result.subtotalHT > 0
+          ? Math.min(1, result.discount / result.subtotalHT)
+          : 0;
+
+        items.forEach((item: any) => {
+          const currency = item.currency || 'HTG';
+          const netAmount = (item.subtotal || 0) * (1 - discountRatio) * (1 + tvaRate / 100);
+
+          if (currency === 'USD') {
+            stats.total_revenue_usd += netAmount;
+          } else {
+            stats.total_revenue_htg += netAmount;
+          }
+
+          if (!productSalesMap.has(sale.seller_id)) {
+            productSalesMap.set(sale.seller_id, new Map());
+          }
+          const sellerProducts = productSalesMap.get(sale.seller_id)!;
+          const existing = sellerProducts.get(item.product_name) || { quantity: 0, revenue: 0 };
+          const revenueConverted = displayCur === 'USD'
+            ? (currency === 'USD' ? netAmount : netAmount / rate)
+            : (currency === 'USD' ? netAmount * rate : netAmount);
+          sellerProducts.set(item.product_name, {
+            quantity: existing.quantity + (item.quantity || 0),
+            revenue: existing.revenue + revenueConverted
           });
-        }
+        });
       });
 
-      // Calculate previous period revenue per seller
+      // Calculate previous period revenue per seller (même méthode)
       const prevRevenueMap = new Map<string, number>();
-      prevSales?.forEach(sale => {
+      prevSales.forEach(sale => {
+        const items = prevItemsBySale.get(sale.id) || [];
+        const result = saleCalculationUtils.calculateSaleTotal(sale, items, rate, displayCur, tvaRate);
         const current = prevRevenueMap.get(sale.seller_id) || 0;
-        prevRevenueMap.set(sale.seller_id, current + (sale.total_amount || 0));
+        prevRevenueMap.set(sale.seller_id, current + result.totalTTC);
       });
 
       // Finalize stats
@@ -188,7 +236,7 @@ export const SellerPerformanceReport = () => {
         if (stats.total_sales > 0) {
           stats.average_cart = stats.total_revenue_converted / stats.total_sales;
         }
-        
+
         const prevRevenue = prevRevenueMap.get(sellerId) || 0;
         if (prevRevenue > 0) {
           stats.trend_percent = ((stats.total_revenue_converted - prevRevenue) / prevRevenue) * 100;
@@ -196,7 +244,6 @@ export const SellerPerformanceReport = () => {
           stats.trend_percent = 100;
         }
 
-        // Get top 5 products
         const sellerProducts = productSalesMap.get(sellerId);
         if (sellerProducts) {
           stats.top_products = Array.from(sellerProducts.entries())
@@ -206,7 +253,6 @@ export const SellerPerformanceReport = () => {
         }
       });
 
-      // Sort by revenue
       const sortedSellers = Array.from(sellerStatsMap.values())
         .filter(s => s.total_sales > 0)
         .sort((a, b) => b.total_revenue_converted - a.total_revenue_converted);
@@ -221,7 +267,7 @@ export const SellerPerformanceReport = () => {
 
   useEffect(() => {
     fetchSellerStats();
-  }, [period, companySettings]);
+  }, [periodRange, companySettings]);
 
   const displayCurrency = companySettings.default_display_currency as 'USD' | 'HTG';
 
@@ -279,19 +325,13 @@ export const SellerPerformanceReport = () => {
           </Badge>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
-          <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-28 sm:w-40 text-xs sm:text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">Aujourd'hui</SelectItem>
-              <SelectItem value="7">7 jours</SelectItem>
-              <SelectItem value="30">30 jours</SelectItem>
-              <SelectItem value="90">3 mois</SelectItem>
-              <SelectItem value="365">1 an</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9" onClick={fetchSellerStats} disabled={loading}>
+          <PeriodRangeFilter
+            value={periodRange}
+            onChange={setPeriodRange}
+            presets={['today', 'week', 'month', 'custom', 'all']}
+            allLabel="Tout l'historique"
+          />
+                    <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9" onClick={fetchSellerStats} disabled={loading}>
             <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
           <Button variant="outline" size="sm" className="h-8 sm:h-9 text-xs sm:text-sm" onClick={exportToExcel} disabled={sellers.length === 0}>

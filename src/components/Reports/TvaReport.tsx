@@ -13,6 +13,7 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { generateTvaReportPDF } from '@/lib/pdfGenerator';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { useCurrencyCalculations } from '@/hooks/useCurrencyCalculations';
+import { format, parseISO, startOfDay, endOfDay, startOfMonth } from 'date-fns';
 
 interface TvaSaleData {
   id: string;
@@ -44,12 +45,8 @@ const formatNumber = (amount: number): string => {
 export const TvaReport = () => {
   const [salesData, setSalesData] = useState<TvaSaleData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [dateFrom, setDateFrom] = useState(() => {
-    const date = new Date();
-    date.setDate(1); // First day of current month
-    return date.toISOString().split('T')[0];
-  });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0]);
+  const [dateFrom, setDateFrom] = useState(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [dateTo, setDateTo] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [totals, setTotals] = useState<TvaTotals>({
     totalHT_HTG: 0, totalHT_USD: 0,
     totalTVA_HTG: 0, totalTVA_USD: 0,
@@ -89,8 +86,8 @@ export const TvaReport = () => {
       const { data: sales, error: salesError } = await supabase
         .from('sales')
         .select('id, created_at, customer_name, subtotal, discount_amount, total_amount')
-        .gte('created_at', `${dateFrom}T00:00:00`)
-        .lte('created_at', `${dateTo}T23:59:59`)
+        .gte('created_at', startOfDay(parseISO(dateFrom)).toISOString())
+        .lte('created_at', endOfDay(parseISO(dateTo)).toISOString())
         .order('created_at', { ascending: false });
 
       if (salesError) throw salesError;
