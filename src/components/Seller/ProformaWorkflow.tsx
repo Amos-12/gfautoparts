@@ -371,22 +371,75 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
     setCart(prev => prev.filter(item => item.id !== productId));
   };
 
+  // Available stock expressed in the item's display unit (m² for ceramique, barres for fer)
+  const getAvailableStock = (item: CartItem): number => {
+    if (item.category === 'ceramique') {
+      const surface = (item.stock_boite || 0) * (item.surface_par_boite || 0);
+      return surface > 0 ? surface : Infinity;
+    }
+    if (item.category === 'fer') {
+      return item.stock_barre && item.stock_barre > 0 ? item.stock_barre : Infinity;
+    }
+    return item.quantity ?? Infinity;
+  };
+
   const updateCartQuantity = (productId: string, newQuantity: number) => {
     if (newQuantity <= 0) {
       removeFromCart(productId);
       return;
     }
-    
+
     setCart(prev => prev.map(item => {
       if (item.id !== productId) return item;
-      
-      const ratio = newQuantity / item.cartQuantity;
+
+      const available = getAvailableStock(item);
+      let qty = newQuantity;
+      if (qty > available) {
+        qty = available;
+        toast({
+          title: "Stock insuffisant",
+          description: `${item.name} : maximum ${available} ${item.displayUnit || item.unit} disponible(s)`,
+          variant: "destructive"
+        });
+      }
+
+      const ratio = qty / item.cartQuantity;
       return {
         ...item,
-        cartQuantity: newQuantity,
-        actualPrice: item.actualPrice ? item.actualPrice * ratio : item.price * newQuantity
+        cartQuantity: qty,
+        actualPrice: item.actualPrice ? item.actualPrice * ratio : item.price * qty
       };
     }));
+  };
+
+  // Editable quantity field for a cart line (commits on blur/Enter)
+  const QuantityInput = ({ item, compact }: { item: CartItem; compact?: boolean }) => {
+    const [val, setVal] = useState(String(item.cartQuantity));
+    useEffect(() => {
+      setVal(String(item.cartQuantity));
+    }, [item.cartQuantity]);
+
+    const commit = () => {
+      const v = parseFloat(val);
+      if (!isNaN(v) && v > 0 && v !== item.cartQuantity) {
+        updateCartQuantity(item.id, v);
+      } else {
+        setVal(String(item.cartQuantity));
+      }
+    };
+
+    return (
+      <Input
+        type="number"
+        min="0"
+        step={item.decimal_autorise || item.category === 'ceramique' ? '0.01' : '1'}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        className={`${compact ? 'w-16 h-7 text-xs' : 'w-20 h-7 text-sm'} text-center px-1`}
+      />
+    );
   };
 
   const clearCart = () => {
@@ -645,14 +698,10 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
   };
 
   const handleAddProduct = (product: Product) => {
-    if (product.category === 'fer' || product.category === 'ceramique') {
-      setSelectedProduct(product);
-      setShowQuantityDialog(true);
-      setCustomQuantityValue('');
-      setQuantityUnit('barre');
-    } else {
-      addToCart(product, 1);
-    }
+    setSelectedProduct(product);
+    setShowQuantityDialog(true);
+    setCustomQuantityValue('');
+    setQuantityUnit('barre');
   };
 
   const handleConfirmQuantity = () => {
@@ -679,6 +728,10 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
     } else if (selectedProduct.category === 'ceramique') {
       const actualPrice = value * (selectedProduct.prix_m2 || selectedProduct.price);
       addToCart(selectedProduct, value, { actualPrice });
+    } else {
+      const qty = selectedProduct.decimal_autorise ? value : Math.round(value);
+      if (qty <= 0) return;
+      addToCart(selectedProduct, qty);
     }
     
     setShowQuantityDialog(false);
@@ -910,13 +963,13 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
                 <Label className="text-sm">
                   {selectedProduct.category === 'ceramique' 
                     ? 'Surface (m²)' 
-                    : quantityUnit === 'tonne' 
-                      ? 'Quantité (tonnes)' 
-                      : 'Nombre de barres'}
+                    : selectedProduct.category === 'fer'
+                      ? (quantityUnit === 'tonne' ? 'Quantité (tonnes)' : 'Nombre de barres')
+                      : `Quantité (${selectedProduct.unit || 'unité'})`}
                 </Label>
                 <Input
                   type="number"
-                  step={selectedProduct.category === 'fer' && quantityUnit === 'tonne' ? '0.25' : '1'}
+                  step={selectedProduct.category === 'fer' && quantityUnit === 'tonne' ? '0.25' : (selectedProduct.decimal_autorise ? '0.01' : '1')}
                   min="0"
                   value={customQuantityValue}
                   onChange={(e) => setCustomQuantityValue(e.target.value)}
@@ -1060,7 +1113,7 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
                       >
                         <Minus className="w-3 h-3" />
                       </Button>
-                      <span className="w-6 text-center text-sm font-medium">{item.cartQuantity}</span>
+                      <QuantityInput item={item} />
                       <Button 
                         variant="outline" 
                         size="icon" 
@@ -1103,7 +1156,7 @@ export const ProformaWorkflow = ({ onConvertToSale }: ProformaWorkflowProps) => 
                       >
                         <Minus className="w-3 h-3" />
                       </Button>
-                      <span className="w-6 text-center text-xs font-medium">{item.cartQuantity}</span>
+                      <QuantityInput item={item} compact />
                       <Button 
                         variant="outline" 
                         size="icon" 
